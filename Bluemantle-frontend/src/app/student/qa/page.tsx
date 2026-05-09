@@ -7,13 +7,17 @@ import { db } from "@/lib/db";
 
 export default function QAPage() {
   const [doubts, setDoubts] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
   const [subject, setSubject] = useState("");
   const [question, setQuestion] = useState("");
+  const [instructorId, setInstructorId] = useState("");
+  const [priority, setPriority] = useState("Low");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
     fetchDoubts();
+    fetchTeachers();
   }, []);
 
   const fetchDoubts = async () => {
@@ -27,15 +31,31 @@ export default function QAPage() {
     }
   };
 
+  const fetchTeachers = async () => {
+    try {
+      const data = await db.user.getTeachers();
+      setTeachers(data || []);
+    } catch (error) {
+      console.error("Failed to fetch teachers:", error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject || !question) return;
     
     setLoading(true);
     try {
-      await db.user.submitDoubt({ subject, question });
+      await db.user.submitDoubt({ 
+        subject, 
+        question, 
+        instructorId: instructorId || undefined, 
+        priority 
+      });
       setSubject("");
       setQuestion("");
+      setInstructorId("");
+      setPriority("Low");
       fetchDoubts();
     } catch (error) {
       console.error("Failed to submit doubt:", error);
@@ -76,10 +96,37 @@ export default function QAPage() {
                     required
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-widest text-outline mb-2">Instructor</label>
+                    <select 
+                      value={instructorId}
+                      onChange={(e) => setInstructorId(e.target.value)}
+                      className="w-full bg-surface_container_high text-on_surface rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent shadow-sm"
+                    >
+                      <option value="">Any Expert</option>
+                      {teachers.map(t => (
+                        <option key={t._id} value={t._id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-widest text-outline mb-2">Priority</label>
+                    <select 
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value)}
+                      className="w-full bg-surface_container_high text-on_surface rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent shadow-sm"
+                    >
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                    </select>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-widest text-outline mb-2">Your Detailed Question</label>
                   <textarea 
-                    rows={5}
+                    rows={4}
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
                     placeholder="Describe your doubt in detail..."
@@ -142,8 +189,10 @@ export default function QAPage() {
                         </p>
                         <p className="text-on_surface leading-relaxed text-sm">{doubt.answer}</p>
                         <div className="mt-4 flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[8px] font-bold">AV</div>
-                          <p className="text-[10px] text-on_surface_variant">Resolved by <strong>Senior Faculty</strong> · {new Date(doubt.resolvedAt).toLocaleDateString()}</p>
+                          <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[8px] font-bold">
+                            {doubt.instructorId?.name?.charAt(0) || "AV"}
+                          </div>
+                          <p className="text-[10px] text-on_surface_variant">Resolved by <strong>{doubt.instructorId?.name || "Senior Faculty"}</strong> · {new Date(doubt.resolvedAt).toLocaleDateString()}</p>
                         </div>
                       </div>
                     )}

@@ -64,15 +64,11 @@ export default function LiveClassControl() {
 
       setSessionActive(true);
 
-      // Launch Zoom Start URL (or fallback to a dummy if testing)
-      if (upcomingClass.zoomStartUrl) {
-        window.open(upcomingClass.zoomStartUrl, "ZoomMeeting", "width=800,height=600");
-      } else {
-        alert("Zoom Start URL not available for this session.");
-      }
-
-      // Launch Mission Control in another tab
+      // Launch Mission Control in a new popup window
       window.open(`/teacher/live/control-center?classId=${upcomingClass._id}&batchId=${upcomingClass.batchId._id}`, "ControlCenter", "width=1200,height=800");
+
+      // Redirect current tab to Zoom Meeting SDK Client View
+      window.location.href = `/teacher/live/${upcomingClass._id}/zoom`;
 
     } catch (err) {
       console.error("Error launching session:", err);

@@ -76,10 +76,27 @@ export default function CoursePlayerPage({ params }: { params: Promise<{ courseI
     setExpandedModules(next);
   };
 
+  if (!data || !studentId) return <div className="h-screen flex items-center justify-center animate-pulse">Initializing Player...</div>;
+
+  const course = data.courseCatalog.find((c: any) => c.id === courseId);
+  if (!course || !activeChapter) return <div className="h-screen flex items-center justify-center">Course not found</div>;
+
+  const allChapters = course.modules.flatMap((m: any) => 
+    m.chapters.map((ch: any) => ({ ...ch, moduleId: m.id }))
+  );
+
+  const isChapterLocked = (chapterId: string) => {
+    const chapterIdx = allChapters.findIndex((ch: any) => ch.id === chapterId);
+    if (chapterIdx === 0) return false;
+    const prevChapter = allChapters[chapterIdx - 1];
+    const progress = data.userProgress?.[studentId]?.[courseId];
+    const prevModProgress = progress?.modules?.[prevChapter.moduleId];
+    return !prevModProgress?.completedVideos.includes(prevChapter.id);
+  };
+
   const selectChapter = async (modId: string, chapter: any) => {
+    if (isChapterLocked(chapter.id)) return;
     setActiveChapter(chapter);
-    
-    // Just update last accessed
     try {
       await db.user.updateProgress({ courseId, moduleId: modId, chapterId: chapter.id });
     } catch (err) {
@@ -89,20 +106,10 @@ export default function CoursePlayerPage({ params }: { params: Promise<{ courseI
 
   const handleVideoEnd = async () => {
     if (!activeChapter || !data) return;
-    
-    // Find module ID for active chapter
-    const activeModule = course?.modules.find((m: any) => m.chapters.some((ch: any) => ch.id === activeChapter.id));
-    
+    const activeModule = course.modules.find((m: any) => m.chapters.some((ch: any) => ch.id === activeChapter.id));
     if (activeModule) {
       try {
-        await db.user.updateProgress({ 
-            courseId, 
-            moduleId: activeModule.id, 
-            chapterId: activeChapter.id, 
-            isCompleted: true 
-        });
-        
-        // Refresh local data to show updated checks
+        await db.user.updateProgress({ courseId, moduleId: activeModule.id, chapterId: activeChapter.id, isCompleted: true });
         const reg = await db.user.getInstitutionalData();
         setData(reg);
       } catch (err) {
@@ -111,12 +118,6 @@ export default function CoursePlayerPage({ params }: { params: Promise<{ courseI
     }
   };
 
-  if (!data || !studentId) return <div className="h-screen flex items-center justify-center animate-pulse">Initializing Player...</div>;
-
-  const course = data.courseCatalog.find((c: any) => c.id === courseId);
-  if (!course || !activeChapter) return <div className="h-screen flex items-center justify-center">Course not found</div>;
-
-  // Calculate Progress accurately
   const progressData = data.userProgress?.[studentId]?.[courseId];
   const progressPercent = progressData?.completion || 0;
 
@@ -151,6 +152,7 @@ export default function CoursePlayerPage({ params }: { params: Promise<{ courseI
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-black flex flex-col relative group">
           <div className="flex-1 flex items-center justify-center relative p-4 md:p-12">
              <PremiumVideoPlayer 
+                key={activeChapter.id}
                 url={activeChapter.videoUrl} 
                 title={activeChapter.title}
                 onEnded={handleVideoEnd}
@@ -215,18 +217,24 @@ export default function CoursePlayerPage({ params }: { params: Promise<{ courseI
                         {mod.chapters.map((chapter: any, chIdx: number) => {
                           const isActive = activeChapter.id === chapter.id;
                           const isWatched = completedChapterIds.includes(chapter.id);
+                          const isLocked = isChapterLocked(chapter.id);
+
                           return (
                             <button
                               key={chapter.id}
                               onClick={() => selectChapter(mod.id, chapter)}
+                              disabled={isLocked}
                               className={cn(
                                 "w-full p-4 pl-11 flex items-start gap-3 hover:bg-primary/5 transition-colors text-left border-l-2",
-                                isActive ? "border-primary bg-primary/5" : "border-transparent"
+                                isActive ? "border-primary bg-primary/5" : "border-transparent",
+                                isLocked && "opacity-50 cursor-not-allowed"
                               )}
                             >
                                <div className="mt-0.5 shrink-0">
                                   {isWatched ? (
                                       <CheckCircle2 className="w-3.5 h-3.5 text-success fill-success/10" />
+                                  ) : isLocked ? (
+                                      <Lock className="w-3.5 h-3.5 text-outline" />
                                   ) : isActive ? (
                                       <Play className="w-3.5 h-3.5 text-primary fill-primary" />
                                   ) : (

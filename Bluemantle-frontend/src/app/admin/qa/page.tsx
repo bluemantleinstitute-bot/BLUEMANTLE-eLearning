@@ -1,131 +1,74 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/KnowledgeCard";
 import { DataTable } from "@/components/DataTable";
 import { 
   Download, Star, Clock, CheckCircle2, AlertCircle, 
   TrendingUp, Users, X, Mail, Phone, Calendar, 
-  Award, Activity, Zap, ExternalLink 
+  Award, Activity, Zap, ExternalLink, RefreshCw 
 } from "lucide-react";
-
-// Aggregated QA data
-const QA_RECORDS = [
-  { id: 1, teacherId: "TCH-001", teacher: "Dr. Vance",   batch: "CS-2024-B4",  student: "Alice Waverly", studentId: "STU-8901", subject: "Data Structures",   question: "Why is Red-Black tree preferred over AVL?",        submittedAt: "Oct 24, 2024 09:15", resolvedAt: "Oct 24, 2024 11:30", status: "Resolved", responseTime: "2h 15m" },
-  { id: 2, teacherId: "TCH-001", teacher: "Dr. Vance",   batch: "CS-2024-B4",  student: "Julian Chen",   studentId: "STU-8824", subject: "Quantum Computing", question: "How does QFT isolate period in Shor's algorithm?",  submittedAt: "Oct 22, 2024 14:30", resolvedAt: "Oct 22, 2024 18:10", status: "Resolved", responseTime: "3h 40m" },
-  { id: 3, teacherId: "TCH-002", teacher: "Prof. Smith", batch: "DES-2024-A1", student: "Sienna Rossi",  studentId: "STU-8901", subject: "Design Theory",     question: "Difference between UX and UI in system design?",   submittedAt: "Oct 23, 2024 10:00", resolvedAt: "Oct 23, 2024 12:45", status: "Resolved", responseTime: "2h 45m" },
-  { id: 4, teacherId: "TCH-001", teacher: "Dr. Vance",   batch: "CS-2024-B4",  student: "John Doe",      studentId: "STU-8821", subject: "Machine Learning",  question: "Can backprop work without differentiable activation?", submittedAt: "Oct 24, 2024 11:42", resolvedAt: "",                   status: "Pending",  responseTime: "—"      },
-  { id: 5, teacherId: "TCH-002", teacher: "Prof. Smith", batch: "DES-2024-A1", student: "Amara Okafor",  studentId: "STU-8905", subject: "Color Theory",      question: "How do complementary colors affect readability?",  submittedAt: "Oct 25, 2024 09:00", resolvedAt: "",                   status: "New",      responseTime: "—"      },
-];
-
-// Extended Student Profiles for the "Dossier"
-const STUDENT_PROFILES: Record<string, any> = {
-  "STU-8901": {
-    name: "Alice Waverly",
-    email: "a.waverly@academy.edu",
-    phone: "+44 7700 900077",
-    enrollment: "Jan 12, 2024",
-    batch: "DES-2024-A1",
-    attendance: "94%",
-    progress: "88%",
-    xp: "2,450",
-    rank: "Elite Scholar",
-    behavioralTags: ["Highly Active", "Early Submitter"],
-    bio: "Alice is an Advanced Design student with a focus on system-level UX. She consistently outperforms in theoretical assessments."
-  },
-  "STU-8824": {
-    name: "Julian Chen",
-    email: "j.chen@academy.edu",
-    phone: "+44 7700 900551",
-    enrollment: "Feb 05, 2024",
-    batch: "CS-2024-B4",
-    attendance: "98%",
-    progress: "92%",
-    xp: "3,100",
-    rank: "Grandmaster",
-    behavioralTags: ["Fast Learner", "Problem Solver"],
-    bio: "Julian specialized in Quantum Computing and Algorithms. He is currently leading the batch in complex logic implementations."
-  },
-  "STU-8821": {
-    name: "John Doe",
-    email: "john.doe@academy.edu",
-    phone: "+44 7700 900882",
-    enrollment: "Mar 10, 2024",
-    batch: "CS-2024-B4",
-    attendance: "72%",
-    progress: "45%",
-    xp: "850",
-    rank: "Apprentice",
-    behavioralTags: ["Needs Attention", "Late Submitter"],
-    bio: "John is currently lagging behind in Machine Learning modules. Recommendation: Intensive doubt clearing sessions."
-  },
-  "STU-8905": {
-    name: "Amara Okafor",
-    email: "amara.o@academy.edu",
-    phone: "+44 7700 900123",
-    enrollment: "Apr 22, 2024",
-    batch: "DES-2024-A1",
-    attendance: "85%",
-    progress: "60%",
-    xp: "1,200",
-    rank: "Professional",
-    behavioralTags: ["Steady Progress"],
-    bio: "Amara focuses on Visual Arts and Color Theory. She shows a strong grasp of design fundamentals."
-  }
-};
-
-// Aggregate per teacher
-function buildTeacherStats(records: typeof QA_RECORDS) {
-  const map: Record<string, any> = {};
-  records.forEach(r => {
-    if (!map[r.teacherId]) {
-      map[r.teacherId] = {
-        teacherId: r.teacherId,
-        teacher: r.teacher,
-        total: 0, resolved: 0, pending: 0, newCount: 0,
-        avgResponseTime: "—",
-        resolvedTimes: [] as number[],
-      };
-    }
-    map[r.teacherId].total++;
-    if (r.status === "Resolved") {
-      map[r.teacherId].resolved++;
-      const mins = parseInt(r.responseTime.replace(/[^0-9]/g, "")) || 0;
-      map[r.teacherId].resolvedTimes.push(mins);
-    }
-    if (r.status === "Pending") map[r.teacherId].pending++;
-    if (r.status === "New") map[r.teacherId].newCount++;
-  });
-
-  return Object.values(map).map((s: any) => {
-    const avg = s.resolvedTimes.length
-      ? Math.round(s.resolvedTimes.reduce((a: number, b: number) => a + b, 0) / s.resolvedTimes.length)
-      : 0;
-    const h = Math.floor(avg / 60);
-    const m = avg % 60;
-    s.avgResponseTime = avg ? `${h}h ${m}m` : "—";
-    s.resolutionRate = s.total ? Math.round((s.resolved / s.total) * 100) : 0;
-    return s;
-  });
-}
+import { db } from "@/lib/db";
 
 export default function AdminQAPage() {
-  const [filter, setFilter] = useState<"All" | "Resolved" | "Pending" | "New">("All");
+  const [filter, setFilter] = useState<"All" | "Resolved" | "Pending" | "In Review">("All");
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [doubts, setDoubts] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = filter === "All" ? QA_RECORDS : QA_RECORDS.filter(r => r.status === filter);
-  const teacherStats = buildTeacherStats(QA_RECORDS);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  const selectedStudent = selectedStudentId ? STUDENT_PROFILES[selectedStudentId] : null;
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [doubtsData, statsData] = await Promise.all([
+        db.user.getAllDoubts(),
+        db.user.getDoubtStats()
+      ]);
+      setDoubts(doubtsData || []);
+      setStats(statsData || null);
+    } catch (error) {
+      console.error("Failed to fetch QA reports:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filtered = useMemo(() => {
+    if (filter === "All") return doubts;
+    return doubts.filter(r => r.status === filter);
+  }, [doubts, filter]);
+
+  const teacherStats = useMemo(() => {
+    if (!stats?.byInstructor) return [];
+    return stats.byInstructor.map((item: any) => ({
+      teacherId: item._id,
+      teacher: item.instructor?.name || "System/Deleted",
+      total: item.count,
+      resolved: item.resolved,
+      resolutionRate: Math.round((item.resolved / item.count) * 100),
+      avgResponseTime: "Calculated" // Placeholder unless we add avg calculation to aggregate
+    }));
+  }, [stats]);
+
+  const selectedStudent = useMemo(() => {
+    if (!selectedStudentId) return null;
+    const doubt = doubts.find(d => d.studentId?._id === selectedStudentId);
+    return doubt?.studentId || null;
+  }, [selectedStudentId, doubts]);
+
   const studentDoubtHistory = useMemo(() => {
-    return QA_RECORDS.filter(r => r.studentId === selectedStudentId);
-  }, [selectedStudentId]);
+    return doubts.filter(r => r.studentId?._id === selectedStudentId);
+  }, [selectedStudentId, doubts]);
 
   const handleExport = () => {
-    const headers = ["#", "Teacher", "Teacher ID", "Batch", "Student", "Student ID", "Subject", "Question", "Submitted", "Resolved At", "Status", "Response Time"];
-    const rows = QA_RECORDS.map((r, i) => [
-      i + 1, r.teacher, r.teacherId, r.batch, r.student, r.studentId,
-      r.subject, `"${r.question}"`, r.submittedAt, r.resolvedAt || "—", r.status, r.responseTime
+    const headers = ["#", "Teacher", "Teacher ID", "Student", "Student ID", "Subject", "Question", "Submitted", "Resolved At", "Status"];
+    const rows = doubts.map((r, i) => [
+      i + 1, r.instructorId?.name || "Unassigned", r.instructorId?._id || "—", r.studentId?.name || "Deleted", r.studentId?._id || "—",
+      r.subject, `"${r.question}"`, new Date(r.createdAt).toLocaleString(), r.resolvedAt ? new Date(r.resolvedAt).toLocaleString() : "—", r.status
     ]);
     const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -138,46 +81,37 @@ export default function AdminQAPage() {
   };
 
   const logColumns = [
-    { key: "teacher", header: "Teacher", render: (v: string, r: any) => (
+    { key: "instructorId", header: "Teacher", render: (v: any) => (
       <div>
-        <p className="font-bold text-on_surface text-sm">{v}</p>
-        <p className="text-[10px] text-outline tracking-widest">{r.teacherId}</p>
+        <p className="font-bold text-on_surface text-sm">{v?.name || "Unassigned"}</p>
+        <p className="text-[10px] text-outline tracking-widest uppercase">{v?._id?.slice(-6) || "—"}</p>
       </div>
     )},
-    { key: "batch", header: "Batch", render: (v: string) => (
-      <span className="text-[10px] font-bold text-secondary bg-secondary/10 px-2 py-0.5 rounded tracking-widest">{v}</span>
-    )},
-    { key: "student", header: "Student", render: (v: string, r: any) => (
+    { key: "studentId", header: "Student", render: (v: any) => (
       <button 
-        onClick={() => setSelectedStudentId(r.studentId)}
+        onClick={() => setSelectedStudentId(v?._id)}
         className="text-left group transition-all"
       >
-        <p className="font-bold text-on_surface text-sm group-hover:text-primary">{v}</p>
-        <p className="text-[10px] text-outline tracking-widest flex items-center gap-1 group-hover:text-primary/70">
-          {r.studentId} <ExternalLink className="w-2.5 h-2.5" />
+        <p className="font-bold text-on_surface text-sm group-hover:text-primary">{v?.name || "Deleted"}</p>
+        <p className="text-[10px] text-outline tracking-widest flex items-center gap-1 group-hover:text-primary/70 uppercase">
+          {v?._id?.slice(-6) || "—"} <ExternalLink className="w-2.5 h-2.5" />
         </p>
       </button>
     )},
     { key: "subject", header: "Subject" },
-    { key: "submittedAt", header: "Filed At" },
-    { key: "responseTime", header: "Response" },
+    { key: "createdAt", header: "Filed At", render: (v: string) => new Date(v).toLocaleDateString() },
     { key: "status", header: "Status", render: (v: string) => (
       <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${
         v === "Resolved" ? "bg-primary/10 text-primary" :
-        v === "Pending"  ? "bg-secondary/10 text-secondary" :
+        v === "In Review"  ? "bg-secondary/10 text-secondary" :
                            "bg-error/10 text-error"
       }`}>{v}</span>
     )},
   ];
 
   const perfColumns = [
-    { key: "teacher", header: "Teacher", render: (v: string, r: any) => (
-      <div>
-        <p className="font-bold text-on_surface">{v}</p>
-        <p className="text-[10px] text-outline">{r.teacherId}</p>
-      </div>
-    )},
-    { key: "total",    header: "Total Doubts" },
+    { key: "teacher", header: "Teacher" },
+    { key: "total",    header: "Total" },
     { key: "resolutionRate", header: "Efficiency", render: (v: number) => (
       <div className="flex items-center gap-2">
         <div className="w-20 h-1.5 bg-surface_container_highest rounded-full overflow-hidden">
@@ -186,8 +120,14 @@ export default function AdminQAPage() {
         <span className="text-xs font-bold text-on_surface">{v}%</span>
       </div>
     )},
-    { key: "avgResponseTime", header: "Avg. Response" },
   ];
+
+  if (loading) return (
+    <div className="p-20 text-center">
+      <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+      <p className="text-on_surface_variant animate-pulse font-medium">Aggregating QA Intelligence...</p>
+    </div>
+  );
 
   return (
     <div className="space-y-8 pb-16 animate-in fade-in duration-500">
@@ -208,10 +148,10 @@ export default function AdminQAPage() {
       {/* Stats Quick View */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total Queries",  value: QA_RECORDS.length, icon: Users, color: "text-primary" },
-          { label: "Resolved",       value: QA_RECORDS.filter(r => r.status === "Resolved").length, icon: CheckCircle2, color: "text-primary" },
-          { label: "Live Pending",   value: QA_RECORDS.filter(r => r.status === "Pending").length, icon: Clock, color: "text-secondary" },
-          { label: "Avg Efficiency", value: "84%", icon: Zap, color: "text-primary" },
+          { label: "Total Queries",  value: stats?.overview?.total || 0, icon: Users, color: "text-primary" },
+          { label: "Resolved",       value: stats?.overview?.resolved || 0, icon: CheckCircle2, color: "text-primary" },
+          { label: "Live Pending",   value: stats?.overview?.pending || 0, icon: Clock, color: "text-secondary" },
+          { label: "In Review",      value: stats?.overview?.inReview || 0, icon: AlertCircle, color: "text-error" },
         ].map(s => (
           <KnowledgeCard key={s.label} className="p-5">
             <div className="flex gap-3 items-center">
@@ -233,7 +173,7 @@ export default function AdminQAPage() {
               <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-5 border-b border-outline_variant/10 mb-0">
                 <CardTitle>Global Doubt Audit Log</CardTitle>
                 <div className="flex gap-2 text-[10px] font-bold">
-                  {(["All", "Resolved", "Pending", "New"] as const).map(f => (
+                  {(["All", "Resolved", "Pending", "In Review"] as const).map(f => (
                     <button
                       key={f}
                       onClick={() => setFilter(f)}
@@ -312,24 +252,24 @@ export default function AdminQAPage() {
                           <Mail className="w-4 h-4 text-primary" />
                        </div>
                        <p className="font-bold text-on_surface mb-1">{selectedStudent.email}</p>
-                       <p className="text-xs text-on_surface_variant">{selectedStudent.phone}</p>
+                       <p className="text-xs text-on_surface_variant">{selectedStudent.phone || "No contact digits found"}</p>
                     </KnowledgeCard>
 
                     <KnowledgeCard className="p-5 flex flex-col justify-between">
                        <div className="flex justify-between items-start mb-4">
-                          <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Batch Identity</p>
+                          <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Identity</p>
                           <Calendar className="w-4 h-4 text-secondary" />
                        </div>
-                       <p className="font-bold text-on_surface mb-1">{selectedStudent.batch}</p>
-                       <p className="text-xs text-on_surface_variant underline">Enrolled: {selectedStudent.enrollment}</p>
+                       <p className="font-bold text-on_surface mb-1">{selectedStudent.name}</p>
+                       <p className="text-xs text-on_surface_variant">Status: {selectedStudent.status?.toUpperCase()}</p>
                     </KnowledgeCard>
 
                     <KnowledgeCard className="p-5 flex flex-col justify-between">
                        <div className="flex justify-between items-start mb-4">
-                          <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Reward Points</p>
+                          <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Reward Matrix</p>
                           <Star className="w-4 h-4 text-warning" />
                        </div>
-                       <p className="text-2xl font-black font-manrope text-on_surface">{selectedStudent.xp} XP</p>
+                       <p className="text-2xl font-black font-manrope text-on_surface">{selectedStudent.xp || 0} XP</p>
                        <p className="text-[10px] font-bold text-outline uppercase">Azure Academy Standing</p>
                     </KnowledgeCard>
                  </div>
@@ -340,34 +280,26 @@ export default function AdminQAPage() {
                     <KnowledgeCard className="p-6">
                        <CardHeader className="px-0 pb-4 mb-4 border-b border-outline_variant/10">
                           <CardTitle className="text-sm flex items-center gap-2">
-                             <Activity className="w-4 h-4 text-primary" /> Academic Pulse
+                             <Activity className="w-4 h-4 text-primary" /> Academic Profile
                           </CardTitle>
                        </CardHeader>
                        <div className="space-y-6">
                           <div>
                              <div className="flex justify-between text-xs font-bold mb-1.5">
-                                <span>Attendance Threshold</span>
-                                <span className="text-primary">{selectedStudent.attendance}</span>
+                                <span>Engagement Threshold</span>
+                                <span className="text-primary">Dynamic</span>
                              </div>
                              <div className="w-full h-1.5 bg-surface_container_highest rounded-full overflow-hidden">
-                                <div className="h-full bg-primary" style={{ width: selectedStudent.attendance }} />
-                             </div>
-                          </div>
-                          <div>
-                             <div className="flex justify-between text-xs font-bold mb-1.5">
-                                <span>Course Completion</span>
-                                <span className="text-secondary">{selectedStudent.progress}</span>
-                             </div>
-                             <div className="w-full h-1.5 bg-surface_container_highest rounded-full overflow-hidden">
-                                <div className="h-full bg-secondary" style={{ width: selectedStudent.progress }} />
+                                <div className="h-full bg-primary" style={{ width: "75%" }} />
                              </div>
                           </div>
                           <div className="flex gap-2 pt-2">
-                             {selectedStudent.behavioralTags.map((tag: string) => (
-                               <span key={tag} className="text-[10px] font-bold bg-surface_container_high px-2 py-0.5 rounded border border-outline_variant/30 text-outline">
-                                  {tag}
-                               </span>
-                             ))}
+                              <span className="text-[10px] font-bold bg-surface_container_high px-2 py-0.5 rounded border border-outline_variant/30 text-outline">
+                                 {selectedStudent.status?.toUpperCase()}
+                              </span>
+                              <span className="text-[10px] font-bold bg-surface_container_high px-2 py-0.5 rounded border border-outline_variant/30 text-outline">
+                                 STUDENT
+                              </span>
                           </div>
                        </div>
                     </KnowledgeCard>
@@ -380,14 +312,14 @@ export default function AdminQAPage() {
                           </CardTitle>
                        </CardHeader>
                        <p className="text-sm text-on_surface_variant leading-relaxed italic">
-                          "{selectedStudent.bio}"
+                          "{selectedStudent.description || "No specific student dossier notes provided for this user."}"
                        </p>
                        <div className="mt-6 flex flex-col gap-3">
                           <div className="p-3 bg-surface_container_low border border-outline_variant/20 rounded-xl flex items-center gap-3">
                              <Award className="w-5 h-5 text-primary" />
                              <div>
-                                <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Current Standing</p>
-                                <p className="font-bold text-on_surface text-xs">{selectedStudent.rank}</p>
+                                <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Academic Role</p>
+                                <p className="font-bold text-on_surface text-xs">{selectedStudent.title || "Elite Scholar"}</p>
                              </div>
                           </div>
                        </div>
@@ -407,11 +339,10 @@ export default function AdminQAPage() {
                     <DataTable 
                       data={studentDoubtHistory} 
                       columns={[
-                        { key: "submittedAt", header: "Timestamp" },
+                        { key: "createdAt", header: "Timestamp", render: (v: string) => new Date(v).toLocaleDateString() },
                         { key: "subject", header: "Subject" },
                         { key: "question", header: "Technical Query", render: (v: string) => <p className="line-clamp-1 max-w-[200px] italic">"{v}"</p> },
-                        { key: "teacher", header: "Handled By" },
-                        { key: "responseTime", header: "Response" },
+                        { key: "instructorId", header: "Handled By", render: (v: any) => v?.name || "Unassigned" },
                         { key: "status", header: "Result", render: (v: string) => (
                            <span className={v === 'Resolved' ? 'text-primary font-bold' : 'text-error font-bold'}>{v}</span>
                         )}

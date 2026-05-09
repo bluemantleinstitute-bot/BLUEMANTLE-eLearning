@@ -42,10 +42,15 @@ const authMiddleware = async (req, res, next) => {
         }
 
         const now = new Date();
-        const thirtyMinutesMs = 30 * 60 * 1000;
+        const studentTimeout = 30 * 60 * 1000;
+        const facultyTimeout = 12 * 60 * 60 * 1000; // 12 hours for teachers/admins
+        const timeoutLimit = (user.role === 'teacher' || user.role === 'admin' || user.role === 'owner') 
+            ? facultyTimeout 
+            : studentTimeout;
+
         const timeSinceLastActive = now.getTime() - new Date(user.lastActive).getTime();
 
-        if (timeSinceLastActive > thirtyMinutesMs) {
+        if (timeSinceLastActive > timeoutLimit) {
             return res.status(401).json({
                 success: false,
                 message: "Session expired due to inactivity"

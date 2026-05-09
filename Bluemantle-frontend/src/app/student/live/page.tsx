@@ -1,16 +1,38 @@
 import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/KnowledgeCard";
-import { Clock, Video } from "lucide-react";
+import { Clock, Video, RefreshCw, AlertCircle } from "lucide-react";
 import { LiveJoinManager } from "@/components/LiveJoinManager";
+import { SessionRefresher } from "@/components/SessionRefresher";
 import { db } from "@/lib/db";
 
+export const dynamic = 'force-dynamic';
+
 export default async function LiveClassPage() {
-  const classes = await db.user.getLiveClasses();
+  let classes = [];
+  let errorMsg = "";
+
+  try {
+    classes = await db.user.getLiveClasses();
+  } catch (error: any) {
+    console.error("Failed to fetch live classes:", error);
+    errorMsg = error.message || "Unable to sync with live terminal.";
+  }
+
   const liveNow = classes.find((c: any) => c.status === 'live');
-  const upcoming = classes.filter((c: any) => c.status !== 'live' && new Date(c.date) > new Date());
+  const upcoming = classes.filter((c: any) => 
+    c.status === 'scheduled' && new Date(c.date) > new Date()
+  );
 
   return (
     <div className="space-y-8 pb-10">
-      <h1 className="text-4xl font-manrope font-bold tracking-tight mb-6">Live Classes</h1>
+      <SessionRefresher />
+      <div className="flex justify-between items-center">
+        <h1 className="text-4xl font-manrope font-bold tracking-tight">Live Classes</h1>
+        {errorMsg && (
+          <div className="flex items-center gap-2 text-error text-xs font-bold bg-error/10 px-4 py-2 rounded-xl animate-pulse">
+            <AlertCircle className="w-4 h-4" /> {errorMsg}
+          </div>
+        )}
+      </div>
 
       {liveNow ? (
         <KnowledgeCard className="bg-surface_container_lowest border-primary/20 shadow-ambient overflow-hidden relative">

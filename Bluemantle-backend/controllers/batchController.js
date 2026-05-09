@@ -54,8 +54,19 @@ exports.getBatchDetails = async (req, res) => {
         if (req.user.role === "student" && !batch.students.some(s => s._id.toString() === req.user.id)) {
             return res.status(403).json({ success: false, message: "Access denied. Not enrolled in this batch." });
         }
-        if (req.user.role === "teacher" && (!batch.teacherId || batch.teacherId._id.toString() !== req.user.id)) {
-            return res.status(403).json({ success: false, message: "Access denied. Not assigned to this batch." });
+        
+        if (req.user.role === "teacher") {
+            const batchTeacherId = batch.teacherId?._id?.toString() || batch.teacherId?.toString();
+            // Allow if assigned as batch teacher
+            const isAssignedTeacher = batchTeacherId === req.user.id;
+            
+            // Also allow if they have ANY live class for this batch (secondary check)
+            const LiveClass = require("../models/LiveClass");
+            const hasClass = await LiveClass.exists({ batchId: batch._id, teacherId: req.user.id });
+
+            if (!isAssignedTeacher && !hasClass) {
+                return res.status(403).json({ success: false, message: "Access denied. Not assigned to this batch or its classes." });
+            }
         }
 
         res.json({ success: true, message: "Batch details retrieved successfully", data: batch });

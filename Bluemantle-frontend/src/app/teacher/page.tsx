@@ -5,8 +5,10 @@ import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/Kno
 import { Users, Calendar, TrendingUp, Clock, BookOpen, Upload, Bell, ArrowRight, X, Video, FileText, RefreshCw, AlertCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { apiRequest } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 export default function TeacherDashboard() {
+  const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
@@ -112,6 +114,44 @@ export default function TeacherDashboard() {
     }
   };
 
+  const handleIgnite = async (classId: string, batchId: string) => {
+    try {
+      // Set status to live immediately
+      await apiRequest(`/classes/${classId}/status`, {
+        method: "PUT",
+        body: JSON.stringify({ status: "live" })
+      });
+
+      // Open zoom meeting in new tab
+      window.open(`/teacher/live/${classId}/zoom`, '_blank');
+      
+      // Navigate to control center
+      router.push(`/teacher/live/control-center?classId=${classId}&batchId=${batchId}`);
+    } catch (err) {
+      console.error("Failed to ignite session:", err);
+      // Fallback: still try to navigate
+      router.push(`/teacher/live/control-center?classId=${classId}&batchId=${batchId}`);
+    }
+  };
+
+  const handleReignite = async (classId: string) => {
+    if (!confirm("This will revert the session status to LIVE and allow students to re-enter. Proceed?")) return;
+    try {
+      setLoading(true);
+      const res = await db.user.reigniteLiveClass(classId);
+      if (res.success) {
+        alert("Session Re-ignited! You can now launch it again.");
+        await fetchData();
+      } else {
+        alert(res.message || "Failed to re-ignite");
+      }
+    } catch (err) {
+      alert("Error re-igniting session");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading || !data) {
     return <div className="p-20 text-center animate-pulse text-on_surface_variant">Syncing with Faculty Terminal...</div>;
   }
@@ -210,9 +250,21 @@ export default function TeacherDashboard() {
                         </div>
                     </div>
                     <div className="flex items-center">
-                        <button className="bg-surface_container_high p-2 rounded-xl group-hover:bg-primary group-hover:text-on_primary transition-all">
-                          <ArrowRight className="w-5 h-5" />
-                        </button>
+                        {lecture.status === 'finished' ? (
+                          <button 
+                            onClick={() => handleReignite(lecture._id)}
+                            className="bg-secondary_container px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest text-secondary hover:bg-secondary hover:text-on_secondary transition-all flex items-center gap-2"
+                          >
+                            Resume Session <RefreshCw className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => handleIgnite(lecture._id, lecture.batchId?._id || lecture.batchId)}
+                            className="bg-surface_container_high px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-on_primary transition-all flex items-center gap-2"
+                          >
+                            Ignite <ArrowRight className="w-4 h-4" />
+                          </button>
+                        )}
                     </div>
                   </div>
                 ))

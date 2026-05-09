@@ -202,3 +202,13 @@ exports.unlinkDevice = async (req, res) => {
 };
 
 
+exports.listTeachers = async (req, res) => {
+    try {
+        const teachers = await User.find({ role: "teacher", status: "active" })
+            .select("name title description linkedin")
+            .lean();
+        res.json({ success: true, data: teachers });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};

@@ -32,12 +32,28 @@ const normalizeStudentData = (backendData: any) => {
       name: backendData.profile.name || "Student",
       joined: backendData.profile.joined ? new Date(backendData.profile.joined).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : "January 2026",
     },
-    upcomingLiveClass: backendData.upcomingClasses[0] ? {
-      title: backendData.upcomingClasses[0].topic,
-      instructor: backendData.profile.teacher,
-      batch: backendData.profile.batch,
-      countdown: "Starts Soon" // Could calculate actual diff here
-    } : null,
+    upcomingLiveClass: (() => {
+      // Prefer a currently live class, then fall back to next scheduled (ignore finished/recorded)
+      const allClasses = backendData.upcomingClasses || [];
+      const liveNow = allClasses.find((c: any) => c.status === 'live');
+      const next = liveNow || allClasses.find((c: any) => c.status === 'scheduled');
+      
+      if (!next) return null;
+      const diffMs = new Date(next.date).getTime() - Date.now();
+      const diffMins = Math.max(0, Math.floor(diffMs / 60000));
+      let countdown = diffMs <= 0 ? "Live Now" : diffMins < 60 ? `${diffMins}m` : `${Math.floor(diffMins / 60)}h ${diffMins % 60}m`;
+      
+      if (next.status === 'finished') countdown = "Finished";
+      if (next.status === 'live') countdown = "Live Now";
+      return {
+        id: next._id,
+        title: next.topic,
+        instructor: next.teacherId?.name || "Assigning...",
+        batch: next.batchId?.name || "Generic",
+        status: next.status,
+        countdown
+      };
+    })(),
     courses: backendData.enrolledCourses.map((c: any) => ({
       id: c._id,
       name: c.title,
@@ -80,8 +96,8 @@ const normalizeStudentData = (backendData: any) => {
     schedule: (backendData.upcomingClasses || []).map((c: any) => ({
       date: new Date(c.date).toLocaleDateString(),
       time: new Date(c.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      teacher: backendData.profile.teacher,
-      batch: backendData.profile.batch,
+      teacher: c.teacherId?.name || "Assigning...",
+      batch: c.batchId?.name || "Generic",
       topic: c.topic
     })),
     activeDevice: backendData.activeDevice ? {
@@ -99,10 +115,13 @@ const normalizeTeacherData = (backendData: any) => {
     assignedCourses: backendData.assignedCourses || [],
     studentCount: backendData.studentCount,
     todayClasses: backendData.todayClasses.map((c: any) => ({
+      _id: c._id,
+      batchId: c.batchId._id || c.batchId,
       time: new Date(c.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       title: c.topic,
       location: c.batchId.name,
-      students: `${c.duration} mins`
+      students: `${c.duration} mins`,
+      status: c.status
     })),
     upcomingSessions: backendData.upcomingClasses.map((c: any) => ({
       date: new Date(c.date).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
@@ -117,7 +136,7 @@ const normalizeTeacherData = (backendData: any) => {
 export const db = {
   user: {
     getStudentData: async () => {
-      const response = await apiRequest("/dashboard/student");
+      const response = await apiRequest("/dashboard/student", { cache: 'no-store' } as any);
       return normalizeStudentData(response.data);
     },
     getTeacherData: async () => {
@@ -128,16 +147,53 @@ export const db = {
       const response = await apiRequest("/admin/devices"); 
       return response.data;
     },
-    submitDoubt: async (payload: { subject: string, question: string }) => {
-      const response = await apiRequest("/doubts/submit", {
+    submitDoubt: async (doubtData: any) => {
+      const response = await apiRequest("/doubts", {
         method: "POST",
-        body: JSON.stringify(payload)
+        body: JSON.stringify(doubtData),
       });
       return response.data;
     },
     getMyDoubts: async () => {
-      const response = await apiRequest("/doubts/my-doubts");
+      const response = await apiRequest("/doubts/my");
       return response.data;
+    },
+    getAllDoubts: async () => {
+      const response = await apiRequest("/doubts/all");
+      return response.data;
+    },
+    respondToDoubt: async (id: string, responseData: any) => {
+      const response = await apiRequest(`/doubts/respond/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(responseData),
+      });
+      return response.data;
+    },
+    getDoubtStats: async () => {
+      const response = await apiRequest("/doubts/stats");
+      return response.data;
+    },
+
+    // Materials Management
+    getAllVideos: async () => {
+      const response = await apiRequest("/videos");
+      return response.data;
+    },
+    deleteVideo: async (id: string) => {
+      const response = await apiRequest(`/videos/${id}`, {
+        method: "DELETE"
+      });
+      return response.success;
+    },
+    getAllNotes: async () => {
+      const response = await apiRequest("/notes");
+      return response.data;
+    },
+    deleteNote: async (id: string) => {
+      const response = await apiRequest(`/notes/${id}`, {
+        method: "DELETE"
+      });
+      return response.success;
     },
     getBatches: async () => {
       const response = await apiRequest("/batches");
@@ -173,7 +229,7 @@ export const db = {
       return response.data;
     },
     getTeachers: async () => {
-      const response = await apiRequest("/admin/teachers");
+      const response = await apiRequest("/users/teachers");
       return response.data;
     },
     // Live Class Management
@@ -205,6 +261,13 @@ export const db = {
       });
       return response;
     },
+    markAsRecorded: async (classId: string, recordingUrl: string) => {
+      const response = await apiRequest(`/classes/${classId}/status`, {
+        method: "PUT",
+        body: JSON.stringify({ status: "recorded", recordingUrl })
+      });
+      return response;
+    },
     addStudentsToBatch: async (batchId: string, studentIds: string[]) => {
       const response = await apiRequest(`/batches/${batchId}/add-students`, {
         method: "POST",
@@ -220,12 +283,24 @@ export const db = {
       return response.data;
     },
 
+    finishLiveClass: async (classId: string) => {
+      const response = await apiRequest(`/classes/${classId}/finish`, {
+        method: "POST"
+      });
+      return response;
+    },
+    reigniteLiveClass: async (classId: string) => {
+      const response = await apiRequest(`/classes/${classId}/reignite`, {
+        method: "POST"
+      });
+      return response;
+    },
     getAttendanceRecords: async () => {
       const response = await apiRequest("/attendance/my-attendance");
       return response.data;
     },
     getLiveClasses: async () => {
-      const response = await apiRequest("/classes/my-classes");
+      const response = await apiRequest("/classes/my-classes", { cache: 'no-store' } as any);
       return response.data;
     },
     getInstitutionalData: async () => {

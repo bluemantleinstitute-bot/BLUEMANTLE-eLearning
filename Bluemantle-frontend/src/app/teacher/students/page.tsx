@@ -1,45 +1,71 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/KnowledgeCard";
 import { DataTable } from "@/components/DataTable";
 import { PremiumSearch } from "@/components/PremiumSearch";
-import { Users, Activity, Layers, TrendingUp, MoreVertical, ExternalLink, CheckCircle2, Lock } from "lucide-react";
-
-const ALL_STUDENTS = [
-  { id: 1, studentId: "STU-8821", name: "Eleanor Fitzwilliam", email: "eleanor.f@academy.edu", enrollment: "Aug 12, 2024", progress: "92%", status: "Active", batchId: "CS-2024-B4" },
-  { id: 2, studentId: "STU-8822", name: "Marcus Thorne", email: "m.thorne@academy.edu", enrollment: "Aug 14, 2024", progress: "88%", status: "Active", batchId: "CS-2024-B4" },
-  { id: 4, studentId: "STU-8824", name: "Julian Chen", email: "j.chen@academy.edu", enrollment: "Aug 15, 2024", progress: "96%", status: "Active", batchId: "CS-2024-B4" },
-  { id: 3, studentId: "STU-8901", name: "Sienna Rossi", email: "s.rossi@academy.edu", enrollment: "Sept 01, 2024", progress: "74%", status: "Active", batchId: "DES-2024-A1" },
-  { id: 5, studentId: "STU-8905", name: "Amara Okafor", email: "amara.o@academy.edu", enrollment: "Sept 05, 2024", progress: "81%", status: "Active", batchId: "DES-2024-A1" },
-  { id: 6, studentId: "STU-9102", name: "Tobias Vane", email: "t.vane@academy.edu", enrollment: "Oct 02, 2024", progress: "45%", status: "Active", batchId: "MATH-2024-C2" },
-];
-
-const BATCHES = [
-  { id: "CS-2024-B4", title: "Advanced Algorithms & Logic", count: 42 },
-  { id: "DES-2024-A1", title: "Human-Centric Design", count: 28 },
-  { id: "MATH-2024-C2", title: "Discrete Mathematics II", count: 56 },
-];
+import { Users, Activity, Layers, TrendingUp, MoreVertical, ExternalLink, CheckCircle2, Lock, RefreshCw, Loader2 } from "lucide-react";
+import { db } from "@/lib/db";
 
 export default function TeacherStudents() {
+  const [batches, setBatches] = useState<any[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+  const [students, setStudents] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadingBatch, setLoadingBatch] = useState(false);
+
+  useEffect(() => {
+    const fetchTeacherBatches = async () => {
+      try {
+        setLoading(true);
+        const data = await db.user.getTeacherData();
+        setBatches(data.assignedBatches || []);
+      } catch (error) {
+        console.error("Failed to fetch teacher batches:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTeacherBatches();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedBatchId) {
+      setStudents([]);
+      return;
+    }
+
+    const fetchBatchStudents = async () => {
+      try {
+        setLoadingBatch(true);
+        const res = await db.user.getBatchDetails(selectedBatchId);
+        if (res) {
+          setStudents(res.students || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch batch students:", error);
+      } finally {
+        setLoadingBatch(false);
+      }
+    };
+
+    fetchBatchStudents();
+  }, [selectedBatchId]);
 
   const filteredStudents = useMemo(() => {
-    if (!selectedBatchId) return [];
-    return ALL_STUDENTS.filter(student => {
-      const matchesBatch = student.batchId === selectedBatchId;
+    return students.filter(student => {
       const matchesSearch = student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        student.studentId.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesBatch && matchesSearch;
+        student.signInId?.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesSearch;
     });
-  }, [selectedBatchId, searchQuery]);
+  }, [students, searchQuery]);
 
-  const activeBatch = BATCHES.find(b => b.id === selectedBatchId);
+  const activeBatch = batches.find(b => b._id === selectedBatchId);
 
   const columns = [
     {
-      key: "studentId",
+      key: "signInId",
       header: "ID",
       render: (val: string) => (
         <span className="text-[10px] font-bold text-primary bg-primary/5 border border-primary/10 px-2 py-1 rounded tracking-widest uppercase whitespace-nowrap">
@@ -62,30 +88,40 @@ export default function TeacherStudents() {
         </div>
       )
     },
-    { key: "enrollment", header: "Enrolled" },
+    { 
+      key: "createdAt", 
+      header: "Enrolled",
+      render: (val: string) => new Date(val).toLocaleDateString()
+    },
     {
       key: "progress",
-      header: "Progress",
-      render: (val: string) => (
-        <div className="flex items-center gap-3 w-28">
-          <div className="flex-1 h-1 bg-surface_container_highest rounded-full overflow-hidden">
-            <div className="h-full bg-primary" style={{ width: val }} />
+      header: "Engagement",
+      render: (_: any, row: any) => {
+        // Mock progress for now as engagement metric
+        const val = "75%"; 
+        return (
+          <div className="flex items-center gap-3 w-28">
+            <div className="flex-1 h-1 bg-surface_container_highest rounded-full overflow-hidden">
+              <div className="h-full bg-primary" style={{ width: val }} />
+            </div>
+            <span className="text-[10px] font-bold text-on_surface">{val}</span>
           </div>
-          <span className="text-[10px] font-bold text-on_surface">{val}</span>
-        </div>
-      )
+        );
+      }
     },
     {
       key: "status",
       header: "Status",
       render: () => <span className="text-[10px] font-bold text-secondary bg-secondary/10 px-2 py-0.5 rounded uppercase">Verified</span>
-    },
-    {
-      key: "actions",
-      header: "",
-      render: () => <button className="p-2 hover:bg-surface_container_high rounded-full"><MoreVertical className="w-4 h-4 text-outline" /></button>
     }
   ];
+
+  if (loading) return (
+    <div className="p-20 text-center">
+      <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+      <p className="text-on_surface_variant animate-pulse font-medium">Initializing Student Protocols...</p>
+    </div>
+  );
 
   return (
     <div className="space-y-8 pb-16 animate-in fade-in duration-500">
@@ -94,7 +130,7 @@ export default function TeacherStudents() {
           <h1 className="text-3xl font-manrope font-bold tracking-tight mb-2">Student Terminal</h1>
           <p className="text-on_surface_variant max-w-2xl">
             {activeBatch
-              ? `Showing all students enrolled in "${activeBatch.title}" — ${activeBatch.id}`
+              ? `Showing all students enrolled in "${activeBatch.name}" — ${activeBatch._id}`
               : "Select an assigned cohort to initialize the student roster."}
           </p>
         </div>
@@ -108,10 +144,10 @@ export default function TeacherStudents() {
       {/* Stats */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total Students", value: ALL_STUDENTS.length.toString(), icon: Users },
+          { label: "Total Students", value: students.length.toString(), icon: Users },
           { label: "Cohort View", value: filteredStudents.length > 0 ? filteredStudents.length.toString() : "—", icon: Activity },
-          { label: "Batches Assigned", value: BATCHES.length.toString(), icon: Layers },
-          { label: "Avg. Completion", value: "88.5%", icon: TrendingUp },
+          { label: "Batches Assigned", value: batches.length.toString(), icon: Layers },
+          { label: "Avg. Engagement", value: "88.5%", icon: TrendingUp },
         ].map((stat) => (
           <KnowledgeCard key={stat.label} className="p-5">
             <div className="flex gap-3 items-center">
@@ -142,14 +178,18 @@ export default function TeacherStudents() {
                 Select one of your assigned cohorts on the right to initialize the student roster and tracking system.
               </p>
             </div>
+          ) : loadingBatch ? (
+            <div className="flex flex-col items-center justify-center h-[420px] border border-outline_variant/20 rounded-3xl bg-surface_container_low/50">
+               <Loader2 className="w-8 h-8 animate-spin text-primary opacity-50" />
+            </div>
           ) : (
             /* ── Active State ── */
             <KnowledgeCard className="animate-in fade-in slide-in-from-bottom-4 duration-400">
               <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-outline_variant/10 pb-6 mb-0">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CheckCircle2 className="w-4 h-4 text-primary" />
-                  {activeBatch?.title}
-                  <span className="text-[10px] font-bold text-outline ml-1 tracking-widest">{activeBatch?.id}</span>
+                  {activeBatch?.name}
+                  <span className="text-[10px] font-bold text-outline ml-1 tracking-widest uppercase">{activeBatch?._id.slice(-6)}</span>
                 </CardTitle>
                 <div className="w-full sm:w-auto">
                   <PremiumSearch
@@ -174,36 +214,40 @@ export default function TeacherStudents() {
         {/* Cohort Selector */}
         <div className="space-y-4">
           <h3 className="text-sm font-bold font-manrope text-outline uppercase tracking-widest px-2">Assigned Cohorts</h3>
-          {BATCHES.map((batch) => (
+          {batches.map((batch) => (
             <KnowledgeCard
-              key={batch.id}
-              onClick={() => { setSelectedBatchId(batch.id); setSearchQuery(""); }}
+              key={batch._id}
+              onClick={() => { setSelectedBatchId(batch._id); setSearchQuery(""); }}
               className={`p-6 transition-all cursor-pointer group relative overflow-hidden ${
-                selectedBatchId === batch.id
+                selectedBatchId === batch._id
                   ? 'border-primary ring-1 ring-primary/20 shadow-ambient bg-surface_container_high'
                   : 'hover:border-primary/30 hover:bg-surface_container_low'
               }`}
             >
-              {selectedBatchId === batch.id && (
+              {selectedBatchId === batch._id && (
                 <div className="absolute top-0 right-0 px-2 py-1 bg-primary text-on_primary rounded-bl-xl">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                 </div>
               )}
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <h4 className={`font-bold text-sm transition-colors ${selectedBatchId === batch.id ? 'text-primary' : 'text-on_surface group-hover:text-primary'}`}>
-                    {batch.title}
+                  <h4 className={`font-bold text-sm transition-colors ${selectedBatchId === batch._id ? 'text-primary' : 'text-on_surface group-hover:text-primary'}`}>
+                    {batch.name}
                   </h4>
-                  <p className="text-[10px] text-outline font-bold tracking-widest mt-1">{batch.id}</p>
+                  <p className="text-[10px] text-outline font-bold tracking-widest mt-1 uppercase">{batch._id.slice(-6)}</p>
                 </div>
-                <ExternalLink className={`w-4 h-4 flex-shrink-0 ml-2 transition-colors ${selectedBatchId === batch.id ? 'text-primary' : 'text-outline group-hover:text-primary'}`} />
+                <ExternalLink className={`w-4 h-4 flex-shrink-0 ml-2 transition-colors ${selectedBatchId === batch._id ? 'text-primary' : 'text-outline group-hover:text-primary'}`} />
               </div>
               <div className="flex items-center gap-2 mt-4 text-[10px] font-bold text-on_surface_variant">
                 <Users className="w-3.5 h-3.5 text-primary" />
-                {ALL_STUDENTS.filter(s => s.batchId === batch.id).length} registered · {batch.count} total capacity
+                Capacity: {batch.maxStudents} · Course: {batch.courseId?.title || "N/A"}
               </div>
             </KnowledgeCard>
           ))}
+
+          {batches.length === 0 && (
+            <p className="text-xs text-on_surface_variant italic text-center py-8">No assigned batches found.</p>
+          )}
 
           <KnowledgeCard className="p-6 mt-2 border-primary/10 bg-surface_container_low text-center">
             <h4 className="font-bold text-sm mb-2">Cohort Intelligence</h4>
@@ -217,3 +261,4 @@ export default function TeacherStudents() {
     </div>
   );
 }
+

@@ -1,10 +1,7 @@
-/* Reset iframe to natural size but block interaction */
+/* Ensure iframe takes full container but respect Plyr's wrapping */
 .plyr__video-embed iframe {
-    transform: scale(1) !important;
     width: 100% !important;
     height: 100% !important;
-    pointer-events: none !important;
-    user-select: none !important;
 }
 
 /* Precision Shields: Block specific areas of the YouTube layer */

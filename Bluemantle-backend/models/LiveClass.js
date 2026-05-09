@@ -48,7 +48,7 @@ const liveClassSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["scheduled", "live", "recorded"],
+      enum: ["scheduled", "live", "finished", "recorded"],
       default: "scheduled"
     }
   },

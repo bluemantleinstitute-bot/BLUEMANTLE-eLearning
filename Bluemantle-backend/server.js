@@ -28,6 +28,7 @@ const userRoutes = require("./routes/userRoutes");
 const teacherRoutes = require("./routes/teacherRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const doubtRoutes = require("./routes/doubtRoutes");
+const zoomRoutes = require("./routes/zoomRoutes");
 
 // Validate environment variables before anything else
 validateEnv();
@@ -48,7 +49,7 @@ app.use(helmet());
 // Rate Limiting (Prevent brute-force)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+  limit: 1000, // Increased limit for development/active sessions
   message: "Too many requests from this IP, please try again later",
   standardHeaders: "draft-7", 
   legacyHeaders: false,
@@ -75,6 +76,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/teacher", teacherRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/doubts", doubtRoutes);
+app.use("/api/zoom", zoomRoutes);
 
 // Test route
 app.get("/", (req, res) => {

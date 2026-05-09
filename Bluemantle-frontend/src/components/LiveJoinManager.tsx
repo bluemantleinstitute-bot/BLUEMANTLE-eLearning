@@ -13,17 +13,19 @@ export function LiveJoinManager({ sessionTitle, classId }: { sessionTitle?: stri
   const handleJoin = async () => {
     if (classId) {
       try {
+        // Attendance will also be captured/synced via Zoom Webhooks, but we leave this here as a fallback
         await apiRequest("/classes/join-live", {
           method: "POST",
           body: JSON.stringify({ classId })
         });
+        window.location.href = `/student/live/${classId}/zoom`;
       } catch (err) {
-        console.error("Error marking attendance:", err);
+        console.error("Error joining session:", err);
+        alert("Failed to connect to the session. Please try again.");
       }
+    } else {
+      alert("No class ID provided.");
     }
-    console.log("Joining with Camera:", cameraActive, "Mic:", micActive);
-    setIsPreJoinOpen(false);
-    alert("Live Session Joined. You have entered the main waiting room.");
   };
 
   return (

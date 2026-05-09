@@ -6,7 +6,7 @@ import {
   Calendar, Clock, MapPin, Users, BookOpen, 
   AlertCircle, ChevronRight, Activity, MoreVertical,
   CalendarDays, Share2, UserCheck, MessageSquare, CheckCircle2,
-  Plus, Trash2, Edit2, RefreshCw, X
+  Plus, Trash2, Edit2, RefreshCw, X, Video
 } from "lucide-react";
 import { db } from "@/lib/db";
 
@@ -28,6 +28,39 @@ export default function ClassSchedule() {
 
   // Edit Modal State
   const [editingClass, setEditingClass] = useState<any>(null);
+
+  // Upload Recording State
+  const [uploadData, setUploadData] = useState({
+    classId: "",
+    title: "",
+    youtubeId: "",
+    duration: ""
+  });
+
+  const handleUploadRecording = async () => {
+    if (!uploadData.classId || !uploadData.youtubeId) {
+      alert("Please select a meeting and provide a YouTube ID");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      // Mark the class as recorded in the database
+      const res = await db.user.markAsRecorded(uploadData.classId, `https://youtube.com/watch?v=${uploadData.youtubeId}`);
+      if (res.success) {
+        triggerNotification("Recording published and class status updated to recorded!");
+        setUploadData({ classId: "", title: "", youtubeId: "", duration: "" });
+        await fetchData();
+      } else {
+        alert(res.message || "Failed to update status");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error publishing recording");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -99,6 +132,22 @@ export default function ClassSchedule() {
       }
     } catch (err) {
       alert("Error updating class");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleFinish = async (id: string) => {
+    if (!confirm("Confirm finishing this session? This will lock entry for all students.")) return;
+    try {
+      setSubmitting(true);
+      const res = await db.user.finishLiveClass(id);
+      if (res.success) {
+        triggerNotification("Session marked as finished.");
+        await fetchData();
+      }
+    } catch (err) {
+      alert("Error finishing session");
     } finally {
       setSubmitting(false);
     }
@@ -190,14 +239,25 @@ export default function ClassSchedule() {
                              <p className="text-[10px] font-bold text-outline uppercase tracking-widest mb-3">
                                 Date: {new Date(item.date).toLocaleDateString()} · Duration: {item.duration} Mins
                              </p>
-                             <div className="flex flex-wrap items-center gap-4">
-                                <span className="text-xs text-on_surface_variant flex items-center gap-1.5 font-medium bg-surface_container_high px-3 py-1 rounded-full">
-                                   <Users className="w-3.5 h-3.5 text-primary" /> {item.batchId?.name}
-                                </span>
-                                <span className="text-xs text-on_surface_variant flex items-center gap-1.5 font-medium bg-surface_container_high px-3 py-1 rounded-full">
-                                   <Activity className={`w-3.5 h-3.5 ${item.status === 'live' ? 'text-error animate-pulse' : 'text-outline'}`} /> 
-                                   Status: {item.status.toUpperCase()}
-                                </span>
+                             <div className="flex flex-wrap items-center justify-between gap-4">
+                                <div className="flex flex-wrap items-center gap-4">
+                                   <span className="text-xs text-on_surface_variant flex items-center gap-1.5 font-medium bg-surface_container_high px-3 py-1 rounded-full">
+                                      <Users className="w-3.5 h-3.5 text-primary" /> {item.batchId?.name}
+                                   </span>
+                                   <span className="text-xs text-on_surface_variant flex items-center gap-1.5 font-medium bg-surface_container_high px-3 py-1 rounded-full">
+                                      <Activity className={`w-3.5 h-3.5 ${item.status === 'live' ? 'text-error animate-pulse' : 'text-outline'}`} /> 
+                                      Status: {item.status.toUpperCase()}
+                                   </span>
+                                </div>
+
+                                {item.status === 'live' && (
+                                  <button 
+                                    onClick={() => handleFinish(item._id)}
+                                    className="bg-error/10 text-error text-[10px] font-bold uppercase px-4 py-1.5 rounded-full hover:bg-error hover:text-on_error transition-all flex items-center gap-2"
+                                  >
+                                     Finish Session <CheckCircle2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                              </div>
                           </div>
                       </div>
@@ -286,24 +346,87 @@ export default function ClassSchedule() {
                  </button>
               </form>
            </KnowledgeCard>
-
-           <div className="p-8 rounded-[2rem] bg-surface_container_low border border-outline_variant/20 relative overflow-hidden">
-              <div className="absolute -top-4 -right-4 opacity-5 rotate-12">
-                 <Share2 className="w-24 h-24" />
-              </div>
-              <div className="flex gap-4 items-start mb-4">
-                 <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                    <AlertCircle className="w-5 h-5" />
+           {/* Upload Recording Box */}
+           <KnowledgeCard className="p-8 border-secondary/20 shadow-glow-secondary/5 bg-surface_container_low">
+              <div className="flex gap-4 items-center mb-6">
+                 <div className="p-3 rounded-xl bg-secondary/10 text-secondary">
+                    <Video className="w-6 h-6" />
                  </div>
-                 <h4 className="font-bold text-on_surface text-sm">System Protocol</h4>
+                 <div>
+                    <p className="text-[10px] font-bold text-outline uppercase tracking-wider leading-none mb-1">Curriculum</p>
+                    <h3 className="text-xl font-bold font-manrope">Upload Recording</h3>
+                 </div>
               </div>
-              <p className="text-[11px] text-on_surface_variant leading-relaxed mb-6">
-                 All schedule changes trigger automated WhatsApp and Email notifications to enrolled students. Class recordings will be automatically processed and available in the curriculum workspace within 2 hours of completion.
-              </p>
-              <div className="flex items-center gap-2 text-[10px] font-bold text-primary">
-                 <Activity className="w-3 h-3" /> Zoom Gateway: Online
+
+              <div className="space-y-4">
+                 <div>
+                    <label className="block text-[10px] font-bold text-outline uppercase tracking-widest mb-2">Select Finished Meeting *</label>
+                    <select 
+                       className="w-full bg-surface_container_highest border border-outline_variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-secondary/50 text-on_surface"
+                       value={uploadData.classId}
+                       onChange={e => {
+                          const cls = schedule.find(c => c._id === e.target.value);
+                          setUploadData({...uploadData, classId: e.target.value, title: cls?.topic || ""});
+                       }}
+                    >
+                       <option value="">Select Meeting</option>
+                       {schedule.filter(c => c.status === 'finished').map(c => (
+                         <option key={c._id} value={c._id}>{c.topic} ({new Date(c.date).toLocaleDateString()})</option>
+                       ))}
+                    </select>
+                 </div>
+
+                 {uploadData.classId && (
+                   <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div>
+                         <label className="block text-[10px] font-bold text-outline uppercase tracking-widest mb-2">Video Title</label>
+                         <input 
+                            type="text"
+                            value={uploadData.title}
+                            onChange={e => setUploadData({...uploadData, title: e.target.value})}
+                            className="w-full bg-surface_container_highest border border-outline_variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-secondary/50 text-on_surface"
+                         />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                         <div>
+                            <label className="block text-[10px] font-bold text-outline uppercase tracking-widest mb-2">YouTube ID</label>
+                            <input 
+                               type="text"
+                               placeholder="e.g. dQw4w9WgXcQ"
+                               value={uploadData.youtubeId}
+                               onChange={e => setUploadData({...uploadData, youtubeId: e.target.value})}
+                               className="w-full bg-surface_container_highest border border-outline_variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-secondary/50 text-on_surface"
+                            />
+                         </div>
+                         <div>
+                            <label className="block text-[10px] font-bold text-outline uppercase tracking-widest mb-2">Duration</label>
+                            <input 
+                               type="text"
+                               placeholder="e.g. 45:00"
+                               value={uploadData.duration}
+                               onChange={e => setUploadData({...uploadData, duration: e.target.value})}
+                               className="w-full bg-surface_container_highest border border-outline_variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-secondary/50 text-on_surface"
+                            />
+                         </div>
+                      </div>
+                      <button 
+                         onClick={handleUploadRecording}
+                         disabled={submitting}
+                         className="w-full bg-secondary text-on_secondary py-4 rounded-2xl font-bold text-sm shadow-ambient hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                      >
+                         {submitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                         Finalize & Publish Recording
+                      </button>
+                   </div>
+                 )}
+                 
+                 {!uploadData.classId && (
+                   <p className="text-[10px] text-on_surface_variant italic leading-relaxed text-center py-4 border-2 border-dashed border-outline_variant/10 rounded-2xl">
+                     Select a finished meeting to begin the upload protocol.
+                   </p>
+                 )}
               </div>
-           </div>
+           </KnowledgeCard>
         </div>
       </div>
 

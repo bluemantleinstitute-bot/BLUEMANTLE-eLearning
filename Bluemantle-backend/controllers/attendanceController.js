@@ -14,7 +14,7 @@ exports.markAttendance = async (req, res) => {
         if (!liveClass) return res.status(404).json({ success: false, message: "Live Class not found" });
 
         // Teacher check: Only the assigned teacher of the class can mark attendance
-        if (liveClass.teacherId.toString() !== req.user.id) {
+        if (liveClass.teacherId?.toString() !== req.user.id) {
             return res.status(403).json({ success: false, message: "Access denied. You are not the teacher for this class." });
         }
 
@@ -60,7 +60,7 @@ exports.getClassAttendance = async (req, res) => {
         if (!liveClass) return res.status(404).json({ success: false, message: "Live Class not found" });
 
         // Access checks
-        if (req.user.role === "teacher" && liveClass.teacherId.toString() !== req.user.id) {
+        if (req.user.role === "teacher" && liveClass.teacherId?.toString() !== req.user.id) {
             return res.status(403).json({ success: false, message: "Access denied." });
         }
 

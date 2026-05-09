@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/KnowledgeCard";
-import { Video, Calendar, Plus, Info, Activity, Clock, Users, ArrowRight, Loader2, Edit2, Trash2, X, RefreshCw } from "lucide-react";
+import { Video, Calendar, Plus, Info, Activity, Clock, Users, ArrowRight, Loader2, Edit2, Trash2, X, RefreshCw, Save } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import { db } from "@/lib/db";
 

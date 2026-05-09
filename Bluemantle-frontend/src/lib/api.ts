@@ -37,7 +37,10 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
+      // Don't redirect on auth endpoints — let the login form handle the error message
+      const isAuthEndpoint = endpoint.startsWith("/auth/login") || endpoint.startsWith("/auth/verify-otp");
+
+      if (!isAuthEndpoint && (response.status === 401 || response.status === 403)) {
         if (!isServer) {
           document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
           document.cookie = "user_role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";

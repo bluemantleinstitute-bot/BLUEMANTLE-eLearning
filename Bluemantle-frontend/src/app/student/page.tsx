@@ -1,16 +1,39 @@
 import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/KnowledgeCard";
 import { ProgressBar } from "@/components/ProgressBar";
-import { Video, Clock, Flag, Bell, Activity, PlayCircle, Shield, Smartphone, TrendingUp, Newspaper } from "lucide-react";
+import { Video, Clock, Flag, Bell, Activity, PlayCircle, Shield, Smartphone, TrendingUp, Newspaper, CheckCircle2, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { LinkedDevicesManager } from "@/components/LinkedDevicesManager";
 import { MotivationalSpinner } from "@/components/MotivationalSpinner";
+import { SessionRefresher } from "@/components/SessionRefresher";
 import { db } from "@/lib/db";
 
+export const dynamic = 'force-dynamic';
+
 export default async function StudentDashboard() {
-  const data = await db.user.getStudentData();
+  let data: any = null;
+  let errorMsg = "";
+
+  try {
+    data = await db.user.getStudentData();
+  } catch (error: any) {
+    console.error("Dashboard data fetch failed:", error);
+    errorMsg = "Offline - Sync Pending";
+    // Provide minimal structure so page doesn't break
+    data = { 
+      profile: { name: "Student", level: "...", totalXP: "0", joined: "...", batch: "...", teacher: "..." },
+      upcomingLiveClass: null,
+      courses: [],
+      announcements: [],
+      reminders: [],
+      marketNews: [],
+      recordings: [],
+      attendance: { rate: "0%" }
+    };
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-10">
+      <SessionRefresher interval={20000} />
       
       {/* LEFT COLUMN: Main Dashboard Content (Spans 2 columns on large screens) */}
       <div className="lg:col-span-2 space-y-8">
@@ -19,8 +42,15 @@ export default async function StudentDashboard() {
         <section>
           <div className="flex justify-between items-center mb-4">
             <MotivationalSpinner />
-            <div className="px-2 py-0.5 rounded-full bg-error/10 text-error text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border border-error/20">
-               <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" /> {data.upcomingLiveClass ? "Live Soon" : "No Live Sessions"}
+            <div className="flex gap-2">
+              {errorMsg && (
+                <div className="px-2 py-0.5 rounded-full bg-error/10 text-error text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border border-error/20">
+                   <AlertCircle className="w-3 h-3" /> {errorMsg}
+                </div>
+              )}
+              <div className="px-2 py-0.5 rounded-full bg-error/10 text-error text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border border-error/20">
+                 <span className="animate-pulse w-1.5 h-1.5 rounded-full bg-error" /> {data.upcomingLiveClass ? "Live Soon" : "No Live Sessions"}
+              </div>
             </div>
           </div>
           
@@ -29,10 +59,21 @@ export default async function StudentDashboard() {
             <div className="absolute -top-24 -right-24 w-96 h-96 bg-primary/20 rounded-full blur-[80px] group-hover:bg-primary/30 group-hover:scale-110 transition-all duration-700 pointer-events-none" />
             <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-secondary/15 rounded-full blur-[60px] group-hover:bg-secondary/25 group-hover:scale-110 transition-all duration-700 pointer-events-none" />
 
-            {data.upcomingLiveClass ? (
+          {data.upcomingLiveClass ? (
               <div className="relative z-10 p-8 lg:p-10 flex flex-col md:flex-row gap-8 items-center justify-between">
                 <div className="flex-1 space-y-6">
                   <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      {data.upcomingLiveClass.status === 'live' ? (
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-error/10 text-error text-[10px] font-bold uppercase tracking-wider border border-error/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" /> Live Now
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider border border-primary/20">
+                          Scheduled
+                        </span>
+                      )}
+                    </div>
                     <h3 className="text-3xl lg:text-5xl font-manrope font-extrabold text-on_surface leading-tight mb-3">
                       {data.upcomingLiveClass.title}
                     </h3>
@@ -44,18 +85,30 @@ export default async function StudentDashboard() {
                   </div>
                   
                   <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center pt-2">
-                    <Link href="/student/live" className="w-full sm:w-auto">
-                      <button className="btn-premium w-full sm:w-auto hover:shadow-[0_0_30px_rgba(0,162,207,0.4)] transition-all flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
-                          <Video className="w-3.5 h-3.5" />
-                        </div>
-                        Enter Live Room
+                    {data.upcomingLiveClass.status === 'live' ? (
+                      <Link href={`/student/live/${data.upcomingLiveClass.id}/zoom`} className="w-full sm:w-auto">
+                        <button className="btn-premium w-full sm:w-auto hover:shadow-[0_0_30px_rgba(0,162,207,0.4)] transition-all flex items-center gap-3">
+                          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                            <Video className="w-3.5 h-3.5" />
+                          </div>
+                          Enter Live Room
+                        </button>
+                      </Link>
+                    ) : data.upcomingLiveClass.status === 'finished' ? (
+                      <button disabled className="w-full sm:w-auto px-6 py-3 rounded-full bg-surface_container border border-outline_variant/30 text-on_surface_variant text-sm font-bold opacity-60 cursor-not-allowed flex items-center gap-3">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Session Finished
                       </button>
-                    </Link>
+                    ) : (
+                      <button disabled className="w-full sm:w-auto px-6 py-3 rounded-full bg-surface_container border border-outline_variant/30 text-on_surface_variant text-sm font-bold opacity-60 cursor-not-allowed flex items-center gap-3">
+                        <Video className="w-4 h-4" />
+                        Available When Live
+                      </button>
+                    )}
                     
                     <div className="px-5 py-3 rounded-full bg-surface_container border border-outline_variant/30 text-sm font-bold text-on_surface flex items-center gap-3 w-full sm:w-auto">
                       <Clock className="w-4 h-4 text-secondary" />
-                      Commences in <span className="text-primary font-extrabold tracking-wide">{data.upcomingLiveClass.countdown}</span>
+                      {data.upcomingLiveClass.status === 'live' ? 'In Progress' : <>Commences in <span className="text-primary font-extrabold tracking-wide ml-1">{data.upcomingLiveClass.countdown}</span></>}
                     </div>
                   </div>
                 </div>

@@ -57,12 +57,10 @@ exports.createZoomMeeting = async ({ topic, startTime, duration = 60, teacherEma
             settings: {
                 host_video: true,
                 participant_video: true,
-                join_before_host: false,
+                join_before_host: true,
                 mute_upon_entry: true,
-                waiting_room: true,
-                auto_recording: "cloud", // Cloud recording ensures it is never lost to local PC crashes
-                approval_type: 0,
-                registration_type: 1,
+                waiting_room: false,
+                auto_recording: "cloud",
                 audio: "both",
                 allow_multiple_devices: false
             }
@@ -148,5 +146,53 @@ exports.getMeetingRecordings = async (meetingId) => {
     } catch (error) {
         console.error(`Error fetching recordings for meeting ${meetingId}:`, error.response?.data || error.message);
         return [];
+    }
+};
+/**
+ * Update an existing Zoom meeting
+ * @param {string} meetingId
+ * @param {Object} options - { topic, startTime, duration }
+ */
+exports.updateZoomMeeting = async (meetingId, { topic, startTime, duration }) => {
+    try {
+        const token = await getZoomAccessToken();
+        const url = `https://api.zoom.us/v2/meetings/${meetingId}`;
+        
+        const payload = {
+            topic,
+            type: 2,
+            start_time: startTime,
+            duration
+        };
+
+        await axios.patch(url, payload, {
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        });
+        
+        return true;
+    } catch (error) {
+        console.error(`Error updating Zoom meeting ${meetingId}:`, error.response?.data || error.message);
+        throw new Error("Failed to update Zoom meeting");
+    }
+};
+
+/**
+ * Delete a Zoom meeting
+ * @param {string} meetingId
+ */
+exports.deleteZoomMeeting = async (meetingId) => {
+    try {
+        const token = await getZoomAccessToken();
+        const url = `https://api.zoom.us/v2/meetings/${meetingId}`;
+
+        await axios.delete(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        return true;
+    } catch (error) {
+        console.error(`Error deleting Zoom meeting ${meetingId}:`, error.response?.data || error.message);
+        // We don't throw here to allow deleting from our DB even if Zoom delete fails (e.g. already deleted)
+        return false;
     }
 };

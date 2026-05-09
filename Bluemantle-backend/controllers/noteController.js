@@ -56,3 +56,26 @@ exports.getStudentNotes = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+exports.getAllNotes = async (req, res) => {
+    try {
+        const notes = await Note.find()
+            .populate("courseId", "title")
+            .populate("moduleId", "title")
+            .sort({ createdAt: -1 });
+        res.json({ success: true, data: notes });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.deleteNote = async (req, res) => {
+    try {
+        const note = await Note.findByIdAndDelete(req.params.id);
+        if (!note) {
+            return res.status(404).json({ success: false, message: "Note not found" });
+        }
+        res.json({ success: true, message: "Note deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

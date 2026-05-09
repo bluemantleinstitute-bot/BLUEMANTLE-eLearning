@@ -1,111 +1,96 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/KnowledgeCard";
-import { MessageSquare, Check, X, Clock, AlertCircle, Inbox, CheckCircle2, Star } from "lucide-react";
+import { MessageSquare, Check, X, Clock, AlertCircle, Inbox, CheckCircle2, Star, RefreshCw } from "lucide-react";
+import { db } from "@/lib/db";
 
-type DoubtStatus = "New" | "Pending" | "Resolved";
+type DoubtStatus = "Pending" | "In Review" | "Resolved";
 
-type Doubt = {
-  id: number;
-  student: string;
-  studentId: string;
-  batchId: string;
-  subject: string;
-  question: string;
-  status: DoubtStatus;
-  answer?: string;
-  submittedAt: string;
-  resolvedAt?: string;
-};
-
-const INITIAL_DOUBTS: Doubt[] = [
-  {
-    id: 101,
-    student: "Alice Waverly",
-    studentId: "STU-8901",
-    batchId: "DES-2024-A1",
-    subject: "Data Structures",
-    question: "Why is a Red-Black tree preferred over an AVL tree for the C++ STL map implementation?",
-    status: "New",
-    submittedAt: "Oct 24, 2024 – 09:15 AM",
-  },
-  {
-    id: 102,
-    student: "John Doe",
-    studentId: "STU-8821",
-    batchId: "CS-2024-B4",
-    subject: "Machine Learning",
-    question: "Can backpropagation be applied effectively without a differentiable activation function?",
-    status: "Pending",
-    submittedAt: "Oct 24, 2024 – 11:42 AM",
-  },
-  {
-    id: 103,
-    student: "Julian Chen",
-    studentId: "STU-8824",
-    batchId: "CS-2024-B4",
-    subject: "Quantum Computing",
-    question: "In Shor's algorithm, how does the QFT isolate the period of the modular state?",
-    status: "Resolved",
-    submittedAt: "Oct 22, 2024 – 02:30 PM",
-    resolvedAt: "Oct 22, 2024 – 06:10 PM",
-    answer: "The QFT exploits constructive interference among amplitudes that share the correct period, causing those states to dominate probabilistically.",
-  },
-];
-
-const TABS: { key: DoubtStatus | "All"; label: string; icon: React.ElementType }[] = [
-  { key: "New",      label: "New Arrivals", icon: Inbox        },
-  { key: "Pending",  label: "Pending",      icon: Clock        },
-  { key: "Resolved", label: "Answered",     icon: CheckCircle2 },
+const TABS: { key: DoubtStatus; label: string; icon: React.ElementType }[] = [
+  { key: "Pending",   label: "New Arrivals", icon: Inbox        },
+  { key: "In Review", label: "In Review",    icon: Clock        },
+  { key: "Resolved",  label: "Answered",     icon: CheckCircle2 },
 ];
 
 export default function TeacherQAPage() {
-  const [doubts, setDoubts] = useState<Doubt[]>(INITIAL_DOUBTS);
-  const [activeTab, setActiveTab] = useState<DoubtStatus>("New");
-  const [activeDoubt, setActiveDoubt] = useState<Doubt | null>(null);
+  const [doubts, setDoubts] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<DoubtStatus>("Pending");
+  const [activeDoubt, setActiveDoubt] = useState<any | null>(null);
   const [response, setResponse] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleResolve = (e: React.FormEvent) => {
+  useEffect(() => {
+    fetchDoubts();
+  }, []);
+
+  const fetchDoubts = async () => {
+    try {
+      setLoading(true);
+      const data = await db.user.getAllDoubts();
+      setDoubts(data || []);
+    } catch (error) {
+      console.error("Failed to fetch doubts:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResolve = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeDoubt || !response.trim()) return;
-    const now = new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-    setDoubts(doubts.map(d =>
-      d.id === activeDoubt.id
-        ? { ...d, status: "Resolved", answer: response, resolvedAt: now }
-        : d
-    ));
-    setActiveDoubt(null);
-    setResponse("");
-    setActiveTab("Resolved");
+    
+    try {
+      setSubmitting(true);
+      await db.user.respondToDoubt(activeDoubt._id, { 
+        answer: response, 
+        status: "Resolved" 
+      });
+      setResponse("");
+      setActiveDoubt(null);
+      await fetchDoubts();
+      setActiveTab("Resolved");
+    } catch (error) {
+      console.error("Failed to resolve doubt:", error);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const visibleDoubts = doubts.filter(d => d.status === activeTab);
 
   const counts = {
-    New:      doubts.filter(d => d.status === "New").length,
-    Pending:  doubts.filter(d => d.status === "Pending").length,
-    Resolved: doubts.filter(d => d.status === "Resolved").length,
+    Pending:   doubts.filter(d => d.status === "Pending").length,
+    "In Review": doubts.filter(d => d.status === "In Review").length,
+    Resolved:  doubts.filter(d => d.status === "Resolved").length,
   };
+
+  if (loading) return (
+    <div className="p-20 text-center">
+      <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+      <p className="text-on_surface_variant animate-pulse font-medium">Synchronizing Doubts Inbox...</p>
+    </div>
+  );
 
   return (
     <div className="space-y-8 pb-16 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <h1 className="text-3xl font-manrope font-bold tracking-tight mb-2">Student Doubts Inbox</h1>
-          <p className="text-on_surface_variant max-w-2xl text-sm">
-            Manage, prioritize and resolve incoming queries. All resolutions are logged to your performance record.
+          <p className="text-on_surface_variant max-w-2xl text-sm italic">
+            "Direct wisdom to inquisitive minds."
           </p>
         </div>
         {/* Quick Stats */}
         <div className="flex gap-3 flex-shrink-0">
           <div className="text-center px-4 py-2 bg-error/10 border border-error/20 rounded-xl">
             <p className="text-[10px] font-bold text-outline uppercase tracking-wider">New</p>
-            <p className="text-lg font-extrabold font-manrope text-error">{counts.New}</p>
+            <p className="text-lg font-extrabold font-manrope text-error">{counts.Pending}</p>
           </div>
           <div className="text-center px-4 py-2 bg-secondary/10 border border-secondary/20 rounded-xl">
-            <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Pending</p>
-            <p className="text-lg font-extrabold font-manrope text-secondary">{counts.Pending}</p>
+            <p className="text-[10px] font-bold text-outline uppercase tracking-wider">In Review</p>
+            <p className="text-lg font-extrabold font-manrope text-secondary">{counts["In Review"]}</p>
           </div>
           <div className="text-center px-4 py-2 bg-primary/10 border border-primary/20 rounded-xl">
             <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Resolved</p>
@@ -119,7 +104,7 @@ export default function TeacherQAPage() {
         {TABS.map(tab => (
           <button
             key={tab.key}
-            onClick={() => { setActiveTab(tab.key as DoubtStatus); setActiveDoubt(null); }}
+            onClick={() => { setActiveTab(tab.key); setActiveDoubt(null); }}
             className={`flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-t-xl border-b-2 transition-all ${
               activeTab === tab.key
                 ? "border-primary text-primary bg-primary/5"
@@ -131,7 +116,7 @@ export default function TeacherQAPage() {
             <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
               activeTab === tab.key ? "bg-primary text-on_primary" : "bg-outline_variant/30 text-outline"
             }`}>
-              {counts[tab.key as DoubtStatus]}
+              {counts[tab.key]}
             </span>
           </button>
         ))}
@@ -150,10 +135,10 @@ export default function TeacherQAPage() {
           ) : (
             visibleDoubts.map(doubt => (
               <div
-                key={doubt.id}
+                key={doubt._id}
                 onClick={() => setActiveDoubt(doubt)}
                 className={`p-5 border cursor-pointer rounded-2xl transition-all ${
-                  activeDoubt?.id === doubt.id
+                  activeDoubt?._id === doubt._id
                     ? "border-primary shadow-ambient bg-surface_container_highest"
                     : "border-outline_variant/20 bg-surface_container_low hover:border-primary/50"
                 }`}
@@ -163,17 +148,17 @@ export default function TeacherQAPage() {
                   <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-sm">
                     {doubt.subject}
                   </span>
-                  <span className="text-[10px] text-outline">{doubt.submittedAt.split(" – ")[0]}</span>
+                  <span className="text-[10px] text-outline">{new Date(doubt.createdAt).toLocaleDateString()}</span>
                 </div>
 
                 {/* Student Info */}
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-[10px] font-extrabold flex items-center justify-center flex-shrink-0">
-                    {doubt.student.split(" ").map(n => n[0]).join("")}
+                    {doubt.studentId?.name?.charAt(0) || "S"}
                   </div>
                   <div>
-                    <p className="font-bold text-on_surface text-sm leading-none">{doubt.student}</p>
-                    <p className="text-[10px] text-outline tracking-widest">{doubt.studentId} · {doubt.batchId}</p>
+                    <p className="font-bold text-on_surface text-sm leading-none">{doubt.studentId?.name}</p>
+                    <p className="text-[10px] text-outline tracking-widest uppercase">{doubt.studentId?.email?.split('@')[0]}</p>
                   </div>
                 </div>
 
@@ -181,23 +166,15 @@ export default function TeacherQAPage() {
                   {doubt.question}
                 </p>
 
-                {/* Status badge */}
+                {/* Priority / Status badge */}
                 <div className="mt-3 flex items-center gap-1.5">
-                  {doubt.status === "New" && (
-                    <span className="text-[10px] font-bold text-error flex items-center gap-1 uppercase tracking-widest">
-                      <AlertCircle className="w-3 h-3" /> New Arrival
-                    </span>
-                  )}
-                  {doubt.status === "Pending" && (
-                    <span className="text-[10px] font-bold text-secondary flex items-center gap-1 uppercase tracking-widest">
-                      <Clock className="w-3 h-3" /> In Review
-                    </span>
-                  )}
-                  {doubt.status === "Resolved" && (
-                    <span className="text-[10px] font-bold text-primary flex items-center gap-1 uppercase tracking-widest">
-                      <CheckCircle2 className="w-3 h-3" /> Resolved
-                    </span>
-                  )}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${
+                    doubt.priority === 'High' ? 'bg-error/10 text-error' : 
+                    doubt.priority === 'Medium' ? 'bg-secondary/10 text-secondary' : 
+                    'bg-outline/10 text-outline'
+                  }`}>
+                    {doubt.priority} Priority
+                  </span>
                 </div>
               </div>
             ))
@@ -212,14 +189,13 @@ export default function TeacherQAPage() {
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Query Filed By</p>
-                    <CardTitle className="text-xl">{activeDoubt.student}</CardTitle>
+                    <CardTitle className="text-xl">{activeDoubt.studentId?.name}</CardTitle>
                     {/* Rich metadata */}
                     <div className="flex gap-3 flex-wrap pt-1">
-                      <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded tracking-widest">{activeDoubt.studentId}</span>
-                      <span className="text-[10px] font-bold text-secondary bg-secondary/10 px-2 py-0.5 rounded tracking-widest">{activeDoubt.batchId}</span>
-                      <span className="text-[10px] text-outline font-bold">Submitted: {activeDoubt.submittedAt}</span>
+                      <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded tracking-widest uppercase">{activeDoubt.studentId?.email?.split('@')[0]}</span>
+                      <span className="text-[10px] text-outline font-bold">Submitted: {new Date(activeDoubt.createdAt).toLocaleString()}</span>
                       {activeDoubt.resolvedAt && (
-                        <span className="text-[10px] text-primary font-bold">Resolved: {activeDoubt.resolvedAt}</span>
+                        <span className="text-[10px] text-primary font-bold">Resolved: {new Date(activeDoubt.resolvedAt).toLocaleString()}</span>
                       )}
                     </div>
                   </div>
@@ -259,8 +235,13 @@ export default function TeacherQAPage() {
                       className="w-full bg-surface_container_low border border-outline_variant/30 rounded-xl p-4 text-sm focus:outline-none focus:border-primary/50 transition-colors resize-none"
                     />
                     <div className="flex justify-end pt-2">
-                      <button type="submit" disabled={!response.trim()} className="btn-premium disabled:opacity-50 disabled:cursor-not-allowed">
-                        <Check className="w-4 h-4" /> Resolve & Log to Record
+                      <button 
+                        type="submit" 
+                        disabled={!response.trim() || submitting} 
+                        className="bg-primary text-on_primary px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                      >
+                        {submitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        Resolve & Log to Record
                       </button>
                     </div>
                   </form>

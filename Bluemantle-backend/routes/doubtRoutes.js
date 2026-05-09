@@ -11,5 +11,6 @@ router.get("/my-doubts", auth, roleMiddleware("student"), doubtController.getMyD
 // Admin/Teacher routes
 router.get("/all", auth, roleMiddleware("teacher", "admin", "owner"), doubtController.getAllDoubts);
 router.put("/respond/:id", auth, roleMiddleware("teacher", "admin", "owner"), doubtController.respondToDoubt);
+router.get("/stats", auth, roleMiddleware("admin", "owner"), doubtController.getDoubtStats);
 
 module.exports = router;

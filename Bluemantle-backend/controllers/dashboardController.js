@@ -16,10 +16,11 @@ exports.getStudentDashboard = async (req, res) => {
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
+    const studentId = new mongoose.Types.ObjectId(userId);
 
     // 1. Execute parallel queries
-    const [user, progressRecords, batch, notifications, attendanceStats, announcements, marketNews] = await Promise.all([
-      User.findById(userId)
+    const [user, progressRecords, allBatches, notifications, attendanceStats, announcements, marketNews] = await Promise.all([
+      User.findById(studentId)
         .select("name enrolledCourses level totalXP deviceId deviceStatus lastActive createdAt")
         .populate({
           path: "enrolledCourses",
@@ -27,23 +28,23 @@ exports.getStudentDashboard = async (req, res) => {
         })
         .lean(),
 
-      Progress.find({ userId })
+      Progress.find({ userId: studentId })
         .select("courseId completionPercentage")
         .lean(),
 
-      Batch.findOne({ students: userId })
+      Batch.find({ students: studentId })
         .select("_id name teacherId")
         .populate("teacherId", "name")
         .lean(),
 
-      Notification.find({ userId })
+      Notification.find({ userId: studentId })
         .sort({ createdAt: -1 })
         .limit(5)
         .select("title message type status isRead createdAt")
         .lean(),
 
       Attendance.aggregate([
-        { $match: { studentId: new mongoose.Types.ObjectId(userId) } },
+        { $match: { studentId } },
         { 
           $group: {
             _id: null,
@@ -55,26 +56,30 @@ exports.getStudentDashboard = async (req, res) => {
         }
       ]),
       
-      Announcement.find().sort({ createdAt: -1 }).limit(3).lean(),
+      Announcement.find().sort({ createdAt: -1 }).limit(10).lean(),
       
       MarketNews.find().sort({ createdAt: -1 }).limit(5).lean()
     ]);
 
-    // Filter announcements by targetBatch if necessary
-    const filteredAnnouncements = announcements.filter(a => !a.targetBatch || (batch && a.targetBatch.toString() === batch._id.toString()));
+    const batch = allBatches[0]; // For legacy single-batch references
+    const batchIds = allBatches.map(b => b._id);
 
-    // 2. Fetch Upcoming Classes sequentially (since it needs batch._id)
-    let upcomingClasses = [];
-    if (batch) {
-      upcomingClasses = await LiveClass.find({
-        batchId: batch._id,
-        date: { $gte: new Date() }
-      })
-      .sort({ date: 1 })
-      .limit(5)
-      .select("topic date duration zoomLink")
-      .lean();
-    }
+    // Filter announcements by targetBatch if necessary
+    const filteredAnnouncements = announcements.filter(a => !a.targetBatch || batchIds.some(bid => bid.toString() === a.targetBatch.toString()));
+
+    // 2. Fetch Upcoming Classes for all assigned batches
+    const upcomingClasses = await LiveClass.find({
+      batchId: { $in: batchIds },
+      $or: [
+        { status: "live" },
+        { date: { $gte: new Date(Date.now() - 3600000) } } // Classes from last hour to future
+      ]
+    })
+    .sort({ date: 1 })
+    .limit(5)
+    .populate("batchId", "name")
+    .populate("teacherId", "name")
+    .lean();
 
     // 2.5 Fetch Recent Recordings from enrolled courses (added within last 48 hours)
     const validEnrolledCourses = (user?.enrolledCourses || []).filter(c => c != null);
@@ -199,7 +204,7 @@ exports.getTeacherDashboard = async (req, res) => {
         date: { $gte: todayStart, $lte: todayEnd }
       })
         .sort({ date: 1 })
-        .select("topic date duration zoomLink batchId reminderSent")
+        .select("topic date duration zoomLink batchId reminderSent status teacherId")
         .populate("batchId", "name")
         .lean(),
         
@@ -209,7 +214,7 @@ exports.getTeacherDashboard = async (req, res) => {
       })
         .sort({ date: 1 })
         .limit(5)
-        .select("topic date duration zoomLink batchId reminderSent")
+        .select("topic date duration zoomLink batchId reminderSent status teacherId")
         .populate("batchId", "name")
         .lean(),
         
@@ -285,7 +290,7 @@ exports.getTeacherDashboard = async (req, res) => {
     console.error("Error in getTeacherDashboard:", error);
     return res.status(500).json({
       success: false,
-      message: "Server Error"
+      message: error.message || "Server Error"
     });
   }
 };

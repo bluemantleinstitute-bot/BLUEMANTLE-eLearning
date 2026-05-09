@@ -122,10 +122,16 @@ exports.getRegistry = async (req, res) => {
         lastChapterId: prog.lastAccessedVideo ? prog.lastAccessedVideo.toString() : null
       };
 
-      // Calculate total course completion as average of module percentages (simplified)
+      // Calculate total course completion against all modules in the course
       const moduleProgs = Object.values(userProgress[studentId][courseId].modules);
-      const totalPercent = moduleProgs.reduce((acc, m) => acc + m.percentage, 0);
-      userProgress[studentId][courseId].completion = Math.round(totalPercent / moduleProgs.length) || 0;
+      const totalPercent = moduleProgs.reduce((acc, m) => acc + (m.percentage || 0), 0);
+      
+      const courseModulesCount = dbModules.filter(m => m.courseId && m.courseId.toString() === courseId).length;
+      
+      let finalCompletion = courseModulesCount > 0 ? Math.round(totalPercent / courseModulesCount) : 0;
+      if (finalCompletion > 100) finalCompletion = 100;
+
+      userProgress[studentId][courseId].completion = finalCompletion;
     });
 
     // EXACT structure matching Frontend
@@ -231,7 +237,11 @@ exports.dispatchAction = async (req, res) => {
             
             // Recalculate percentage
             const totalVideosInModule = await Video.countDocuments({ moduleId: payload.moduleId });
-            prog.completionPercentage = Math.round((prog.completedVideos.length / totalVideosInModule) * 100);
+            let percentage = totalVideosInModule > 0 
+                ? Math.round((prog.completedVideos.length / totalVideosInModule) * 100) 
+                : 0;
+            if (percentage > 100) percentage = 100;
+            prog.completionPercentage = percentage;
         }
 
         await prog.save();

@@ -15,15 +15,26 @@ exports.scheduleClass = async (req, res) => {
         const batch = await Batch.findById(batchId).populate("teacherId", "name email");
         if (!batch) return res.status(404).json({ success: false, message: "Batch not found" });
 
-        // Check: only one active/scheduled session per batch at a time
-        const existingActive = await LiveClass.findOne({
-            batchId,
+        const proposedStart = new Date(date);
+        const proposedDuration = parseInt(duration, 10) || 60;
+        const proposedEnd = new Date(proposedStart.getTime() + proposedDuration * 60000);
+
+        // Check: no overlapping sessions across any batches
+        const existingActiveClasses = await LiveClass.find({
             status: { $in: ["scheduled", "live"] }
         });
-        if (existingActive) {
+
+        const overlap = existingActiveClasses.find(c => {
+            const existingStart = new Date(c.date);
+            const existingDuration = parseInt(c.duration, 10) || 60;
+            const existingEnd = new Date(existingStart.getTime() + existingDuration * 60000);
+            return existingStart < proposedEnd && existingEnd > proposedStart;
+        });
+
+        if (overlap) {
             return res.status(409).json({
                 success: false,
-                message: "This batch already has an active or scheduled session. Only one session per batch is allowed at a time."
+                message: "Another live class is already scheduled during this time slot. No overlapping sessions are allowed."
             });
         }
 
@@ -82,6 +93,19 @@ exports.getAllClasses = async (req, res) => {
     }
 };
 
+exports.getClassById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const liveClass = await LiveClass.findById(id)
+            .populate("batchId", "name")
+            .populate("teacherId", "name email");
+        if (!liveClass) return res.status(404).json({ success: false, message: "Class not found" });
+        res.json({ success: true, data: liveClass });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 exports.getTeacherClasses = async (req, res) => {
     try {
         const classes = await LiveClass.find({ teacherId: req.user.id })
@@ -113,16 +137,33 @@ exports.getBatchClasses = async (req, res) => {
 exports.getMyClasses = async (req, res) => {
     try {
         const userId = req.user.id;
-        const batch = await Batch.findOne({ students: userId });
-        if (!batch) return res.status(404).json({ success: false, message: "Batch not found for student" });
+        
+        // Safety check for ObjectId
+        const mongoose = require("mongoose");
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ success: false, message: "Invalid User ID" });
+        }
 
-        const classes = await LiveClass.find({ batchId: batch._id })
-            .sort({ date: 1 })
-            .populate("teacherId", "name")
+        const studentId = new mongoose.Types.ObjectId(userId);
+        
+        // Student may be in multiple batches — find all
+        const batches = await Batch.find({ students: studentId }).select("_id").lean();
+        
+        if (!batches || batches.length === 0) {
+            // Return empty array but success: true
+            return res.json({ success: true, message: "No batches assigned", data: [] });
+        }
+
+        const batchIds = batches.map(b => b._id);
+        const classes = await LiveClass.find({ batchId: { $in: batchIds } })
+            .sort({ date: -1 })
+            .populate("teacherId", "name email")
             .populate("batchId", "name");
+
         res.json({ success: true, message: "Your classes retrieved successfully", data: classes });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error("Error in getMyClasses:", error);
+        res.status(500).json({ success: false, message: "Server error retrieving classes" });
     }
 };
 
@@ -278,6 +319,32 @@ exports.updateClass = async (req, res) => {
         const liveClass = await LiveClass.findById(id);
         if (!liveClass) return res.status(404).json({ success: false, message: "Class not found" });
 
+        // Overlap check if date or duration is changing
+        if (date || duration) {
+            const proposedStart = new Date(date || liveClass.date);
+            const proposedDuration = parseInt(duration || liveClass.duration, 10) || 60;
+            const proposedEnd = new Date(proposedStart.getTime() + proposedDuration * 60000);
+
+            const existingActiveClasses = await LiveClass.find({
+                _id: { $ne: id },
+                status: { $in: ["scheduled", "live"] }
+            });
+
+            const overlap = existingActiveClasses.find(c => {
+                const existingStart = new Date(c.date);
+                const existingDuration = parseInt(c.duration, 10) || 60;
+                const existingEnd = new Date(existingStart.getTime() + existingDuration * 60000);
+                return existingStart < proposedEnd && existingEnd > proposedStart;
+            });
+
+            if (overlap) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Another live class is already scheduled during this time slot. No overlapping sessions are allowed."
+                });
+            }
+        }
+
         // Update Zoom meeting if date or topic changed
         if (topic || date || duration) {
             try {
@@ -325,6 +392,44 @@ exports.deleteClass = async (req, res) => {
         await Attendance.deleteMany({ classId: id });
 
         res.json({ success: true, message: "Live class deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.finishLiveClass = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const liveClass = await LiveClass.findById(id);
+        
+        if (!liveClass) return res.status(404).json({ success: false, message: "Class not found" });
+        if (liveClass.teacherId?.toString() !== req.user.id && req.user.role !== "admin" && req.user.role !== "owner") {
+            return res.status(403).json({ success: false, message: "Unauthorized" });
+        }
+
+        liveClass.status = "finished";
+        await liveClass.save();
+
+        res.json({ success: true, message: "Class finished successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.reigniteLiveClass = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const liveClass = await LiveClass.findById(id);
+        
+        if (!liveClass) return res.status(404).json({ success: false, message: "Class not found" });
+        if (liveClass.teacherId?.toString() !== req.user.id && req.user.role !== "admin" && req.user.role !== "owner") {
+            return res.status(403).json({ success: false, message: "Unauthorized" });
+        }
+
+        liveClass.status = "live";
+        await liveClass.save();
+
+        res.json({ success: true, message: "Class re-ignited successfully. Students can now re-enter the room." });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
