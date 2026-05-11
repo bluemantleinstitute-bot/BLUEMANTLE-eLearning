@@ -17,6 +17,7 @@ export default function ClassSchedule() {
   const [submitting, setSubmitting] = useState(false);
   const [activeActions, setActiveActions] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
   // Form State
   const [formData, setFormData] = useState({
@@ -62,17 +63,42 @@ export default function ClassSchedule() {
     }
   };
 
+  const handleSyncCloudRecording = async () => {
+    if (!uploadData.classId) {
+      alert("Please select a finished meeting first");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const res = await db.user.syncCloudRecording(uploadData.classId);
+      if (res.success) {
+        triggerNotification("Zoom cloud recording attached for 7-day replay access.");
+        setUploadData({ classId: "", title: "", youtubeId: "", duration: "" });
+        await fetchData();
+      } else {
+        alert(res.message || "Zoom cloud recording is not available yet");
+      }
+    } catch (err: any) {
+      alert(err.message || "Error syncing Zoom cloud recording");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
+      setErrorMsg("");
       const [classesData, teacherData] = await Promise.all([
         db.user.getTeacherClasses(),
         db.user.getTeacherData()
       ]);
-      setSchedule(classesData || []);
+      setSchedule([...(classesData || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
       setBatches(teacherData.assignedBatches || []);
     } catch (error) {
       console.error("Failed to fetch schedule data:", error);
+      setErrorMsg("Unable to load your assigned batches and live classes. Please refresh after confirming the backend is running.");
     } finally {
       setLoading(false);
     }
@@ -87,6 +113,10 @@ export default function ClassSchedule() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (batches.length === 0) {
+      setErrorMsg("This teacher account has no assigned batches yet. An admin must assign a batch before scheduling.");
+      return;
+    }
     if (!formData.batchId || !formData.date) return;
 
     try {
@@ -176,6 +206,13 @@ export default function ClassSchedule() {
         </div>
       )}
 
+      {errorMsg && (
+        <div className="p-4 rounded-2xl bg-error/10 border border-error/20 text-error text-sm font-medium flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
       <header className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-manrope font-bold tracking-tight mb-2">Class Schedule</h1>
@@ -199,7 +236,9 @@ export default function ClassSchedule() {
               {schedule.length === 0 ? (
                 <div className="p-16 text-center border-2 border-dashed border-outline_variant/20 rounded-3xl">
                    <Calendar className="w-10 h-10 text-outline/30 mx-auto mb-4" />
-                   <p className="text-on_surface_variant font-medium">No live classes scheduled.</p>
+                   <p className="text-on_surface_variant font-medium">
+                     {batches.length === 0 ? "No batches are assigned to this teacher account." : "No live classes scheduled."}
+                   </p>
                 </div>
               ) : (
                 schedule.map((item) => (
@@ -291,7 +330,7 @@ export default function ClassSchedule() {
                        onChange={e => setFormData({...formData, batchId: e.target.value})}
                        className="w-full bg-surface_container_low border border-outline_variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 text-on_surface"
                     >
-                       <option value="">Select Batch</option>
+                       <option value="">{batches.length === 0 ? "No batches assigned" : "Select Batch"}</option>
                        {batches.map(b => (
                          <option key={b._id} value={b._id}>{b.name}</option>
                        ))}
@@ -338,7 +377,7 @@ export default function ClassSchedule() {
 
                  <button 
                     type="submit"
-                    disabled={submitting}
+                    disabled={submitting || batches.length === 0}
                     className="w-full bg-primary text-on_primary py-4 rounded-2xl font-bold text-sm shadow-ambient hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                  >
                     {submitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -416,6 +455,14 @@ export default function ClassSchedule() {
                       >
                          {submitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
                          Finalize & Publish Recording
+                      </button>
+                      <button
+                         onClick={handleSyncCloudRecording}
+                         disabled={submitting}
+                         className="w-full border border-secondary/40 text-secondary py-3 rounded-2xl font-bold text-sm hover:bg-secondary/10 transition-all flex items-center justify-center gap-2"
+                      >
+                         <RefreshCw className="w-4 h-4" />
+                         Sync Zoom Cloud Recording
                       </button>
                    </div>
                  )}

@@ -3,12 +3,14 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { Target, Trophy, Clock } from "lucide-react";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProgressPage() {
   const data = await db.user.getStudentData();
   const courses = data.courses;
 
-  const completed = courses.filter(c => c.progress === 100).length;
-  const avgCompletion = Math.round(courses.reduce((acc, curr) => acc + curr.progress, 0) / courses.length);
+  const completed = courses.filter((c: any) => c.progress === 100).length;
+  const avgCompletion = Math.round(courses.reduce((acc: number, curr: any) => acc + curr.progress, 0) / courses.length);
 
   return (
     <div className="space-y-8 pb-10">
@@ -47,7 +49,7 @@ export default async function ProgressPage() {
       <KnowledgeCard>
         <CardHeader><CardTitle>Detailed Course Metrics</CardTitle></CardHeader>
         <CardBody className="space-y-8">
-          {courses.map((course) => (
+          {courses.map((course: any) => (
             <div key={course.id} className="flex flex-col md:flex-row gap-6 items-center">
               <div className="w-full md:w-1/3">
                 <h4 className="font-bold text-on_surface text-lg">{course.name}</h4>

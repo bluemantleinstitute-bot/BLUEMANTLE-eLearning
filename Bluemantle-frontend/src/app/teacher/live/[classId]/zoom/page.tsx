@@ -6,10 +6,30 @@ import { apiRequest } from "@/lib/api";
 import ZoomMeetingSDK from "@/components/ZoomMeetingSDK";
 import { Loader2 } from "lucide-react";
 
+type LiveClassSummary = {
+  _id: string;
+  zoomLink?: string;
+  zoomStartUrl?: string;
+  zoomMeetingId?: string;
+  zoomPassword?: string;
+  topic?: string;
+  duration?: number;
+};
+
+type UserProfile = {
+  name?: string;
+  email?: string;
+};
+
+const getErrorMessage = (error: unknown) => {
+  return error instanceof Error ? error.message : "Unable to load live session";
+};
+
 export default function TeacherZoomPage() {
   const { classId } = useParams();
-  const [liveClass, setLiveClass] = useState<any>(null);
-  const [teacherProfile, setTeacherProfile] = useState<any>(null);
+  const resolvedClassId = Array.isArray(classId) ? classId[0] : classId;
+  const [liveClass, setLiveClass] = useState<LiveClassSummary | null>(null);
+  const [teacherProfile, setTeacherProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -25,19 +45,19 @@ export default function TeacherZoomPage() {
         setTeacherProfile(profileRes.user);
 
         if (!classRes.success) throw new Error("Failed to load classes");
-        const currentClass = classRes.data.find((c: any) => c._id === classId);
+        const currentClass = (classRes.data as LiveClassSummary[]).find((c) => c._id === resolvedClassId);
         if (!currentClass) throw new Error("Class not found");
 
         setLiveClass(currentClass);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err) {
+        setError(getErrorMessage(err));
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [classId]);
+  }, [resolvedClassId]);
 
   if (isLoading) {
     return (
@@ -65,6 +85,7 @@ export default function TeacherZoomPage() {
   return (
     <div className="w-full h-screen bg-black">
       <ZoomMeetingSDK
+        classId={resolvedClassId || ""}
         meetingNumber={liveClass.zoomMeetingId?.toString() || ""}
         password={liveClass.zoomPassword || ""}
         userName={teacherProfile.name || "Teacher"}

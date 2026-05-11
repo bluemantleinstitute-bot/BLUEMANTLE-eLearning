@@ -19,6 +19,10 @@ interface LiveClass {
   batchId: { _id: string; name: string };
 }
 
+const getClassEndTime = (liveClass: LiveClass) => {
+  return new Date(liveClass.date).getTime() + (Number(liveClass.duration) || 60) * 60000;
+};
+
 export default function LiveClassControl() {
   const [sessionActive, setSessionActive] = useState(false);
   const [classes, setClasses] = useState<LiveClass[]>([]);
@@ -35,7 +39,7 @@ export default function LiveClassControl() {
       try {
         const res = await apiRequest("/classes/teacher");
         if (res.success) {
-          setClasses(res.data);
+          setClasses([...res.data].sort((a: LiveClass, b: LiveClass) => new Date(a.date).getTime() - new Date(b.date).getTime()));
         } else {
           setError(res.message);
         }
@@ -48,7 +52,9 @@ export default function LiveClassControl() {
     fetchClasses();
   }, []);
 
-  const upcomingClass = classes.find(c => c.status === 'scheduled' || c.status === 'live');
+  const upcomingClass = classes.find((c) => (
+    c.status === 'live' || (c.status === 'scheduled' && getClassEndTime(c) >= Date.now())
+  ));
 
   const handleLaunchSession = async () => {
     if (!upcomingClass) return;
@@ -95,6 +101,11 @@ export default function LiveClassControl() {
           <h1 className="text-3xl font-manrope font-bold tracking-tight mb-1">
              {upcomingClass ? upcomingClass.topic : "No Upcoming Sessions"}
           </h1>
+          {!upcomingClass && !error && (
+            <p className="text-on_surface_variant text-sm max-w-xl">
+              No scheduled sessions are assigned to this teacher account. Ask an admin to assign a batch or schedule a live class for this faculty member.
+            </p>
+          )}
           {upcomingClass && (
             <p className="text-on_surface_variant text-sm flex items-center gap-2">
                <Video className="w-4 h-4 text-primary" /> Interactive Seminar • {new Date(upcomingClass.date).toLocaleString()} ({upcomingClass.duration}m)

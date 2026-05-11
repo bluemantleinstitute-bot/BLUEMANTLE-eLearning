@@ -417,21 +417,21 @@ export default function StudentManagement() {
               </div>
 
               {/* Dynamic Capacity Visualizer below select */}
-              {newStudent.cohort && (
-                <div className={`mt-2 p-3 rounded-lg border ${batchStats[newStudent.cohort] >= 100 ? 'border-error/30 bg-error/5' : 'border-outline_variant/20 bg-surface_container_highest'}`}>
+              {newStudent.batchId && (
+                <div className={`mt-2 p-3 rounded-lg border ${batchStats[newStudent.batchId] >= 100 ? 'border-error/30 bg-error/5' : 'border-outline_variant/20 bg-surface_container_highest'}`}>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-bold text-on_surface">Batch Capacity Target</span>
-                    <span className={`text-xs font-bold ${getCapacityColor(batchStats[newStudent.cohort], 100)}`}>
-                      {batchStats[newStudent.cohort]} / 100
+                    <span className={`text-xs font-bold ${getCapacityColor(batchStats[newStudent.batchId], 100)}`}>
+                      {batchStats[newStudent.batchId]} / 100
                     </span>
                   </div>
                   <div className="w-full h-1.5 bg-outline_variant/20 rounded-full overflow-hidden">
                     <div
-                      className={`h-full bg-opacity-80 rounded-full transition-all duration-500 ${getCapacityBg(batchStats[newStudent.cohort], 100)}`}
-                      style={{ width: `${Math.min(100, Math.max(0, (batchStats[newStudent.cohort] / 100) * 100))}%` }}
+                      className={`h-full bg-opacity-80 rounded-full transition-all duration-500 ${getCapacityBg(batchStats[newStudent.batchId], 100)}`}
+                      style={{ width: `${Math.min(100, Math.max(0, (batchStats[newStudent.batchId] / 100) * 100))}%` }}
                     />
                   </div>
-                  {batchStats[newStudent.cohort] >= 100 && (
+                  {batchStats[newStudent.batchId] >= 100 && (
                     <div className="flex gap-2 items-center mt-2 text-error">
                       <AlertTriangle className="w-3 h-3" />
                       <span className="text-[10px] font-bold">This batch is completely full. System override required.</span>

@@ -24,6 +24,14 @@ const liveClassSchema = new mongoose.Schema(
     zoomStartUrl: {
       type: String  // Host/teacher start URL from Zoom
     },
+    zoomHostId: {
+      type: String
+    },
+    zoomHostEmail: {
+      type: String,
+      lowercase: true,
+      trim: true
+    },
     zoomPassword: {
       type: String  // Meeting password for joining
     },
@@ -45,6 +53,24 @@ const liveClassSchema = new mongoose.Schema(
     recordingUrl: {
       type: String,
       default: null
+    },
+    zoomCloudRecordingUrl: {
+      type: String,
+      default: null
+    },
+    recordingExpiryDate: {
+      type: Date,
+      default: null,
+      index: true
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      index: true
+    },
+    createdByRole: {
+      type: String,
+      enum: ["admin", "owner", "teacher"],
     },
     status: {
       type: String,

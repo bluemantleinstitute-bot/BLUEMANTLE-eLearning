@@ -2,12 +2,19 @@ const crypto = require("crypto");
 
 const validateEnv = () => {
     // 1. Validate required hard variables
-    const required = ["MONGO_URI", "YOUTUBE_API_KEY", "YOUTUBE_CHANNEL_ID"];
+    const required = ["MONGO_URI", "YOUTUBE_API_KEY", "YOUTUBE_CHANNEL_ID", "ZOOM_ACCOUNT_ID", "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET"];
     const missing = required.filter(key => !process.env[key]);
     
     if (missing.length > 0) {
         console.error(`\x1b[31m[ERROR]\x1b[0m Missing required environment variables: ${missing.join(", ")}`);
         console.error("Server startup stopped. Please check your .env file.");
+        process.exit(1);
+    }
+
+    const hasMeetingSdkKey = process.env.SDK_ID || process.env.ZOOM_MEETING_SDK_KEY || process.env.ZOOM_SDK_KEY;
+    const hasMeetingSdkSecret = process.env.SDK_SECRET || process.env.ZOOM_MEETING_SDK_SECRET || process.env.ZOOM_SDK_SECRET;
+    if (!hasMeetingSdkKey || !hasMeetingSdkSecret) {
+        console.error("\x1b[31m[ERROR]\x1b[0m Missing Zoom Meeting SDK credentials. Add SDK_ID and SDK_SECRET, or ZOOM_MEETING_SDK_KEY and ZOOM_MEETING_SDK_SECRET.");
         process.exit(1);
     }
 

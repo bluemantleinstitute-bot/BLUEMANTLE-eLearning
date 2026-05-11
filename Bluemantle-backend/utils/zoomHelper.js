@@ -8,6 +8,11 @@ const axios = require('axios');
 let zoomAccessToken = null;
 let tokenExpiryTime = null;
 
+const zoomAuthHeaders = (token) => ({
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+});
+
 const getZoomAccessToken = async () => {
     try {
         if (zoomAccessToken && tokenExpiryTime && Date.now() < tokenExpiryTime - 300000) {
@@ -35,7 +40,8 @@ const getZoomAccessToken = async () => {
         return zoomAccessToken;
     } catch (error) {
         console.error("Error fetching Zoom access token:", error.response?.data || error.message);
-        throw new Error("Failed to get Zoom access token");
+        const detailedError = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+        throw new Error(`Failed to get Zoom access token. Detail: ${detailedError}`);
     }
 };
 
@@ -80,14 +86,11 @@ exports.createZoomMeeting = async ({ topic, startTime, duration = 60, teacherEma
                 }
             });
         } catch (initialErr) {
-            // If the user does not exist in the Zoom account, fallback to creating it under the master 'me' account
-            if (initialErr.response && initialErr.response.data && initialErr.response.data.code === 1001) {
-                console.warn(`Zoom user ${teacherEmail} not found. Falling back to master account ('me').`);
+            // If there's an error using the teacher's email (e.g. not found, no cloud recording permission), fallback to 'me'
+            if (teacherEmail && initialErr.response) {
+                console.warn(`Zoom creation failed for ${teacherEmail} (${initialErr.response.data?.message || initialErr.response.data?.code}). Falling back to master account ('me').`);
                 response = await axios.post(`https://api.zoom.us/v2/users/me/meetings`, payload, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
+                    headers: zoomAuthHeaders(token)
                 });
             } else {
                 throw initialErr;
@@ -101,10 +104,35 @@ exports.createZoomMeeting = async ({ topic, startTime, duration = 60, teacherEma
             joinUrl: meeting.join_url,
             startUrl: meeting.start_url, // Host URL (for teacher/admin)
             password: meeting.password,
+            hostId: meeting.host_id,
+            hostEmail: meeting.host_email || teacherEmail,
         };
     } catch (error) {
         console.error("Error creating Zoom meeting:", error.response?.data || error.message);
-        throw new Error(error.response?.data?.message || "Failed to create Zoom meeting");
+        const detailedError = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+        throw new Error(`Failed to create Zoom meeting. Detail: ${detailedError}`);
+    }
+};
+
+/**
+ * Fetch a short-lived ZAK for the actual Zoom meeting host.
+ * The Meeting SDK can use this to start a meeting inside the embedded client.
+ * If the Zoom account does not grant the token scope, callers can still fall
+ * back to the normal Meeting SDK host signature or Zoom start_url.
+ */
+exports.getHostZak = async (hostEmailOrId) => {
+    try {
+        const token = await getZoomAccessToken();
+        const zoomUser = hostEmailOrId || "me";
+        const url = `https://api.zoom.us/v2/users/${encodeURIComponent(zoomUser)}/token?type=zak`;
+        const response = await axios.get(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        return response.data?.token || null;
+    } catch (error) {
+        console.error(`Error fetching Zoom ZAK for ${hostEmailOrId || "me"}:`, error.response?.data || error.message);
+        return null;
     }
 };
 

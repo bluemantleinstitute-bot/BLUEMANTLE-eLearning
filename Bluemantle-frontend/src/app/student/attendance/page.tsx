@@ -2,6 +2,8 @@ import { KnowledgeCard, CardBody } from "@/components/KnowledgeCard";
 import { DataTable } from "@/components/DataTable";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export default async function AttendancePage() {
   const data = await db.user.getStudentData();
   const records = await db.user.getAttendanceRecords();

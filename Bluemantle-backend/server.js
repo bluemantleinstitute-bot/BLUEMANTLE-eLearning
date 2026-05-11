@@ -1,4 +1,13 @@
 require("dotenv").config();
+const dns = require("dns");
+
+const dnsServers = (process.env.DNS_SERVERS || "1.1.1.1,8.8.8.8")
+  .split(",")
+  .map((server) => server.trim())
+  .filter(Boolean);
+
+dns.setServers(dnsServers);
+
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -30,6 +39,11 @@ const uploadRoutes = require("./routes/uploadRoutes");
 const doubtRoutes = require("./routes/doubtRoutes");
 const zoomRoutes = require("./routes/zoomRoutes");
 
+const allowedOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 // Validate environment variables before anything else
 validateEnv();
 // Connect to MongoDB
@@ -41,7 +55,12 @@ initScheduler();
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
-  origin: "http://localhost:3000",
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("Not allowed by CORS"));
+  },
   credentials: true
 }));
 app.use(helmet());
@@ -90,5 +109,5 @@ app.get("/", (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`); 
 });

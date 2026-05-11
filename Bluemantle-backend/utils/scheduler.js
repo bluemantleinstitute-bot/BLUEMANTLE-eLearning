@@ -3,6 +3,14 @@ const LiveClass = require("../models/LiveClass");
 const Batch = require("../models/Batch");
 const User = require("../models/user");
 const Notification = require("../models/Notification");
+const Attendance = require("../models/Attendance");
+
+const RECORDING_ACCESS_DAYS = 7;
+
+const getRecordingExpiryDate = (liveClass) => {
+  if (liveClass.recordingExpiryDate) return new Date(liveClass.recordingExpiryDate);
+  return new Date(new Date(liveClass.date).getTime() + RECORDING_ACCESS_DAYS * 24 * 60 * 60 * 1000);
+};
 
 const initScheduler = () => {
   console.log("Initializing scheduler (Asia/Kolkata timezone)...");
@@ -103,6 +111,51 @@ const initScheduler = () => {
         console.log(`[Scheduled Job] Study Reminders: Created ${notificationsToCreate.length} daily reminders.`);
       } catch (error) {
         console.error("Error running Daily Study Reminder cron job:", error);
+      }
+    },
+    {
+      timezone: "Asia/Kolkata",
+    }
+  );
+
+  // 3. Finalize absent attendance after the recording replay window expires.
+  cron.schedule(
+    "30 1 * * *",
+    async () => {
+      try {
+        const now = new Date();
+        const candidateClasses = await LiveClass.find({
+          status: { $in: ["finished", "recorded"] },
+          date: { $lte: new Date(now.getTime() - RECORDING_ACCESS_DAYS * 24 * 60 * 60 * 1000) }
+        }).select("_id batchId date recordingExpiryDate");
+
+        let markedAbsent = 0;
+
+        for (const liveClass of candidateClasses) {
+          if (getRecordingExpiryDate(liveClass) > now) continue;
+
+          const batch = await Batch.findById(liveClass.batchId).select("students").lean();
+          if (!batch?.students?.length) continue;
+
+          const ops = batch.students.map((studentId) => ({
+            updateOne: {
+              filter: { classId: liveClass._id, studentId },
+              update: { $setOnInsert: { status: "absent" } },
+              upsert: true
+            }
+          }));
+
+          if (ops.length > 0) {
+            const result = await Attendance.bulkWrite(ops);
+            markedAbsent += result.upsertedCount || 0;
+          }
+        }
+
+        if (candidateClasses.length > 0) {
+          console.log(`[Scheduled Job] Attendance Finalizer: marked ${markedAbsent} students absent.`);
+        }
+      } catch (error) {
+        console.error("Error running Attendance Finalizer cron job:", error);
       }
     },
     {

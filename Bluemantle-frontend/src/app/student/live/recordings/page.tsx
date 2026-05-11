@@ -14,8 +14,14 @@ export default function LiveRecordingsGallery() {
     const fetchData = async () => {
       try {
         const classes = await db.user.getLiveClasses();
-        // Filter classes that are "recorded"
-        const recordedClasses = classes.filter((c: any) => c.status === "recorded" && c.recordingUrl);
+        const now = Date.now();
+        const recordedClasses = classes.filter((c: any) => {
+          const recordingUrl = c.recordingUrl || c.zoomCloudRecordingUrl;
+          const expiry = c.recordingExpiryDate
+            ? new Date(c.recordingExpiryDate).getTime()
+            : new Date(c.date).getTime() + 7 * 24 * 60 * 60 * 1000;
+          return c.status === "recorded" && recordingUrl && expiry >= now;
+        });
         setRecordings(recordedClasses);
       } catch (error) {
         console.error("Failed to fetch recorded classes:", error);
@@ -48,8 +54,10 @@ export default function LiveRecordingsGallery() {
           {recordings.map((rec: any) => {
             const classDate = new Date(rec.date);
             const now = new Date();
-            const diffInDays = (now.getTime() - classDate.getTime()) / (1000 * 60 * 60 * 24);
-            const withinGracePeriod = diffInDays <= 7;
+            const expiryDate = rec.recordingExpiryDate
+              ? new Date(rec.recordingExpiryDate)
+              : new Date(classDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+            const remainingDays = Math.max(0, Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
 
             return (
               <Link key={rec._id} href={`/student/live/recordings/${rec._id}`}>
@@ -66,9 +74,9 @@ export default function LiveRecordingsGallery() {
                       <span className="text-[10px] font-bold text-primary uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded">
                         {rec.batchId?.name || "Live Session"}
                       </span>
-                      {withinGracePeriod && (
+                      {remainingDays > 0 && (
                         <span className="text-[10px] font-bold text-secondary uppercase tracking-widest bg-secondary/10 px-2 py-0.5 rounded animate-pulse">
-                          Grace Period
+                          {remainingDays}d left
                         </span>
                       )}
                     </div>

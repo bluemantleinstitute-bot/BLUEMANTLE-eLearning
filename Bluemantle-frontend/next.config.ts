@@ -1,6 +1,17 @@
 import type { NextConfig } from "next";
 
+const apiOrigin = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api").origin;
+  } catch {
+    return "http://localhost:5000";
+  }
+})();
+
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: process.cwd(),
+  },
   async headers() {
     return [
       {
@@ -15,7 +26,7 @@ const nextConfig: NextConfig = {
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://*.zoom.us https://zoom.us https://i.ytimg.com https://img.youtube.com https://cdn.plyr.io",
               "media-src 'self' blob: https://*.zoom.us https://www.youtube.com",
-              "connect-src 'self' https://*.zoom.us https://zoom.us wss://*.zoom.us http://localhost:5000 https://cdn.plyr.io",
+              `connect-src 'self' https://*.zoom.us https://zoom.us wss://*.zoom.us ${apiOrigin} https://cdn.plyr.io`,
               "frame-src 'self' https://zoom.us https://*.zoom.us https://www.youtube.com https://www.youtube-nocookie.com",
               "worker-src 'self' blob: https://*.zoom.us",
               "child-src 'self' blob: https://zoom.us https://*.zoom.us https://www.youtube.com https://www.youtube-nocookie.com",

@@ -5,7 +5,7 @@ import { ArrowLeft, Clock, Calendar, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import dynamic from 'next/dynamic';
-import { api } from "@/lib/api";
+import { apiRequest } from "@/lib/api";
 
 const PremiumVideoPlayer = dynamic(
   () => import("@/components/PremiumVideoPlayer").then(mod => mod.PremiumVideoPlayer),
@@ -17,6 +17,21 @@ export default function LiveRecordingPlayer({ params }: { params: Promise<{ clas
   const [recording, setRecording] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [attendanceMarked, setAttendanceMarked] = useState(false);
+
+  const markReplayAttendance = async () => {
+    if (attendanceMarked) return;
+    try {
+      const res = await apiRequest("/classes/watch-recording", {
+        method: "POST",
+        body: JSON.stringify({ classId }),
+      });
+      if (res.success) {
+        setAttendanceMarked(true);
+      }
+    } catch (err) {
+      console.error("Failed to mark attendance for recording:", err);
+    }
+  };
 
   useEffect(() => {
     const fetchRecording = async () => {
@@ -33,20 +48,13 @@ export default function LiveRecordingPlayer({ params }: { params: Promise<{ clas
     fetchRecording();
   }, [classId]);
 
-  const handleVideoEnd = async () => {
-    if (attendanceMarked) return;
-    try {
-      const res = await api.post("/api/live-classes/watch-recording", { classId });
-      if (res.success) {
-        setAttendanceMarked(true);
-      }
-    } catch (err) {
-      console.error("Failed to mark attendance for recording:", err);
-    }
-  };
+  const handleVideoEnd = markReplayAttendance;
 
   if (loading) return <div className="h-screen flex items-center justify-center animate-pulse">Loading Recording...</div>;
   if (!recording || !recording.recordingUrl) return <div className="h-screen flex items-center justify-center">Recording not found</div>;
+
+  const recordingUrl = recording.recordingUrl;
+  const isYouTubeRecording = recordingUrl.includes("youtube.com") || recordingUrl.includes("youtu.be");
 
   return (
     <div className="fixed inset-0 bg-background z-[100] flex flex-col">
@@ -70,11 +78,23 @@ export default function LiveRecordingPlayer({ params }: { params: Promise<{ clas
 
       <div className="flex-1 overflow-y-auto custom-scrollbar bg-black flex flex-col relative">
         <div className="flex-1 flex items-center justify-center relative p-4 md:p-12">
-           <PremiumVideoPlayer 
-              url={recording.recordingUrl} 
-              title={recording.topic}
-              onEnded={handleVideoEnd}
-           />
+           {isYouTubeRecording ? (
+             <PremiumVideoPlayer 
+                url={recordingUrl} 
+                title={recording.topic}
+                onEnded={handleVideoEnd}
+             />
+           ) : (
+             <a
+               href={recordingUrl}
+               target="_blank"
+               rel="noopener noreferrer"
+               onClick={markReplayAttendance}
+               className="px-6 py-3 rounded-xl bg-primary text-on_primary font-bold text-sm"
+             >
+               Open Secure Recording
+             </a>
+           )}
         </div>
         <div className="bg-surface_container_lowest p-8 shrink-0">
            <div className="max-w-4xl mx-auto">

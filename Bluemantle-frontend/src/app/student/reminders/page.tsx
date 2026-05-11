@@ -2,6 +2,8 @@ import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/Kno
 import { Flag, Bell, Video } from "lucide-react";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export default async function RemindersPage() {
   const data = await db.user.getStudentData();
 
@@ -11,7 +13,7 @@ export default async function RemindersPage() {
       
       <KnowledgeCard className="bg-surface_container_lowest">
         <CardBody className="p-2 space-y-2">
-          {data.reminders.map((rem) => (
+          {data.reminders.map((rem: any) => (
             <div key={rem.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface rounded-xl p-4 border border-outline_variant/30 hover:border-primary/30 transition-all group">
               <div className="flex gap-4 items-center">
                 <div className={`p-3 rounded-full flex items-center justify-center ${

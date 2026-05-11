@@ -6,10 +6,29 @@ import { apiRequest } from "@/lib/api";
 import ZoomMeetingSDK from "@/components/ZoomMeetingSDK";
 import { Loader2 } from "lucide-react";
 
+type LiveClassSummary = {
+  _id: string;
+  zoomLink?: string;
+  zoomMeetingId?: string;
+  zoomPassword?: string;
+  topic?: string;
+  duration?: number;
+};
+
+type UserProfile = {
+  name?: string;
+  email?: string;
+};
+
+const getErrorMessage = (error: unknown) => {
+  return error instanceof Error ? error.message : "Unable to load classroom";
+};
+
 export default function StudentZoomPage() {
   const { classId } = useParams();
-  const [liveClass, setLiveClass] = useState<any>(null);
-  const [studentProfile, setStudentProfile] = useState<any>(null);
+  const resolvedClassId = Array.isArray(classId) ? classId[0] : classId;
+  const [liveClass, setLiveClass] = useState<LiveClassSummary | null>(null);
+  const [studentProfile, setStudentProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -25,25 +44,35 @@ export default function StudentZoomPage() {
         setStudentProfile(profileRes.user);
 
         if (!classRes.success) throw new Error("Failed to load classes");
-        const currentClass = classRes.data.find((c: any) => c._id === classId);
+        const currentClass = (classRes.data as LiveClassSummary[]).find((c) => c._id === resolvedClassId);
         if (!currentClass) throw new Error("Class not found or access denied");
 
-        setLiveClass(currentClass);
-
-        // Mark attendance when student enters the room (best-effort, don't block)
-        apiRequest("/classes/join-live", {
+        const joinRes = await apiRequest("/classes/join-live", {
           method: "POST",
           body: JSON.stringify({ classId: currentClass._id }),
-        }).catch(() => {});
-      } catch (err: any) {
-        setError(err.message);
+        });
+
+        if (!joinRes.success || !joinRes.joinUrl) {
+          throw new Error(joinRes.message || "Unable to join live class");
+        }
+
+        setLiveClass({
+          ...currentClass,
+          zoomLink: joinRes.joinUrl,
+          zoomMeetingId: joinRes.meetingNumber,
+          zoomPassword: joinRes.password,
+          topic: joinRes.topic || currentClass.topic,
+          duration: joinRes.duration || currentClass.duration,
+        });
+      } catch (err) {
+        setError(getErrorMessage(err));
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [classId]);
+  }, [resolvedClassId]);
 
   if (isLoading) {
     return (
@@ -71,6 +100,7 @@ export default function StudentZoomPage() {
   return (
     <div className="w-full h-screen bg-black">
       <ZoomMeetingSDK
+        classId={resolvedClassId || ""}
         meetingNumber={liveClass.zoomMeetingId?.toString() || ""}
         password={liveClass.zoomPassword || ""}
         userName={studentProfile.name || "Student"}

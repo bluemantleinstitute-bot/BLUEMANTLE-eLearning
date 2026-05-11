@@ -19,7 +19,7 @@ export const serverDb = {
       return JSON.parse(data);
     } catch (error) {
       console.error("Error reading registry:", error);
-      return { students: [], batches: [], schedule: [], appeals: [] };
+      return { students: [], batches: [], schedule: [], appeals: [], courseCatalog: [], userProgress: {} };
     }
   },
 

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ComponentType, SVGProps } from "react";
 import { useEffect, useState } from "react";
 import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/KnowledgeCard";
 import { MessageSquare, Check, X, Clock, AlertCircle, Inbox, CheckCircle2, Star, RefreshCw } from "lucide-react";
@@ -7,7 +8,7 @@ import { db } from "@/lib/db";
 
 type DoubtStatus = "Pending" | "In Review" | "Resolved";
 
-const TABS: { key: DoubtStatus; label: string; icon: React.ElementType }[] = [
+const TABS: { key: DoubtStatus; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
   { key: "Pending",   label: "New Arrivals", icon: Inbox        },
   { key: "In Review", label: "In Review",    icon: Clock        },
   { key: "Resolved",  label: "Answered",     icon: CheckCircle2 },
@@ -101,25 +102,29 @@ export default function TeacherQAPage() {
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-outline_variant/20 pb-0">
-        {TABS.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => { setActiveTab(tab.key); setActiveDoubt(null); }}
-            className={`flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-t-xl border-b-2 transition-all ${
-              activeTab === tab.key
-                ? "border-primary text-primary bg-primary/5"
-                : "border-transparent text-on_surface_variant hover:text-on_surface hover:bg-surface_container_high"
-            }`}
-          >
-            <tab.icon className="w-4 h-4" />
-            {tab.label}
-            <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-              activeTab === tab.key ? "bg-primary text-on_primary" : "bg-outline_variant/30 text-outline"
-            }`}>
-              {counts[tab.key]}
-            </span>
-          </button>
-        ))}
+        {TABS.map(tab => {
+          const Icon = tab.icon;
+
+          return (
+            <button
+              key={tab.key}
+              onClick={() => { setActiveTab(tab.key); setActiveDoubt(null); }}
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-t-xl border-b-2 transition-all ${
+                activeTab === tab.key
+                  ? "border-primary text-primary bg-primary/5"
+                  : "border-transparent text-on_surface_variant hover:text-on_surface hover:bg-surface_container_high"
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {tab.label}
+              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                activeTab === tab.key ? "bg-primary text-on_primary" : "bg-outline_variant/30 text-outline"
+              }`}>
+                {counts[tab.key]}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

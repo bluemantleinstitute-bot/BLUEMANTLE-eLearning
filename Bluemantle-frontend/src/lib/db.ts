@@ -1,5 +1,11 @@
 import { apiRequest } from "./api";
 
+const getClassEndTime = (liveClass: any) => {
+  const start = new Date(liveClass.date).getTime();
+  const duration = Number(liveClass.duration) || 60;
+  return start + duration * 60000;
+};
+
 export const mockDb = {
   // Keep mockDb for initial structure reference if needed, 
   // but the 'db' export will now fetch real data.
@@ -33,15 +39,19 @@ const normalizeStudentData = (backendData: any) => {
       joined: backendData.profile.joined ? new Date(backendData.profile.joined).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : "January 2026",
     },
     upcomingLiveClass: (() => {
-      // Prefer a currently live class, then fall back to next scheduled (ignore finished/recorded)
-      const allClasses = backendData.upcomingClasses || [];
+      const allClasses = [...(backendData.upcomingClasses || [])].sort(
+        (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
       const liveNow = allClasses.find((c: any) => c.status === 'live');
-      const next = liveNow || allClasses.find((c: any) => c.status === 'scheduled');
+      const nextScheduled = allClasses.find((c: any) => (
+        c.status === 'scheduled' && getClassEndTime(c) >= Date.now()
+      ));
+      const next = liveNow || nextScheduled;
       
       if (!next) return null;
       const diffMs = new Date(next.date).getTime() - Date.now();
       const diffMins = Math.max(0, Math.floor(diffMs / 60000));
-      let countdown = diffMs <= 0 ? "Live Now" : diffMins < 60 ? `${diffMins}m` : `${Math.floor(diffMins / 60)}h ${diffMins % 60}m`;
+      let countdown = diffMs <= 0 ? "Awaiting Start" : diffMins < 60 ? `${diffMins}m` : `${Math.floor(diffMins / 60)}h ${diffMins % 60}m`;
       
       if (next.status === 'finished') countdown = "Finished";
       if (next.status === 'live') countdown = "Live Now";
@@ -93,7 +103,10 @@ const normalizeStudentData = (backendData: any) => {
       duration: v.duration,
       time: new Date(v.createdAt).toLocaleDateString()
     })),
-    schedule: (backendData.upcomingClasses || []).map((c: any) => ({
+    schedule: [...(backendData.upcomingClasses || [])]
+      .filter((c: any) => ["scheduled", "live"].includes(c.status) && getClassEndTime(c) >= Date.now())
+      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .map((c: any) => ({
       date: new Date(c.date).toLocaleDateString(),
       time: new Date(c.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       teacher: c.teacherId?.name || "Assigning...",
@@ -224,10 +237,6 @@ export const db = {
       });
       return response.data;
     },
-    getBatches: async () => {
-      const response = await apiRequest("/batches");
-      return response.data;
-    },
     getTeachers: async () => {
       const response = await apiRequest("/users/teachers");
       return response.data;
@@ -265,6 +274,12 @@ export const db = {
       const response = await apiRequest(`/classes/${classId}/status`, {
         method: "PUT",
         body: JSON.stringify({ status: "recorded", recordingUrl })
+      });
+      return response;
+    },
+    syncCloudRecording: async (classId: string) => {
+      const response = await apiRequest(`/classes/${classId}/sync-recording`, {
+        method: "POST"
       });
       return response;
     },

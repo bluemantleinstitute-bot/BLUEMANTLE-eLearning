@@ -1,10 +1,15 @@
 import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/KnowledgeCard";
-import { Clock, Video, RefreshCw, AlertCircle } from "lucide-react";
+import { Clock, Video, RefreshCw, AlertCircle, PlayCircle } from "lucide-react";
+import Link from "next/link";
 import { LiveJoinManager } from "@/components/LiveJoinManager";
 import { SessionRefresher } from "@/components/SessionRefresher";
 import { db } from "@/lib/db";
 
 export const dynamic = 'force-dynamic';
+
+const getClassEndTime = (liveClass: any) => {
+  return new Date(liveClass.date).getTime() + (Number(liveClass.duration) || 60) * 60000;
+};
 
 export default async function LiveClassPage() {
   let classes = [];
@@ -17,10 +22,14 @@ export default async function LiveClassPage() {
     errorMsg = error.message || "Unable to sync with live terminal.";
   }
 
-  const liveNow = classes.find((c: any) => c.status === 'live');
-  const upcoming = classes.filter((c: any) => 
-    c.status === 'scheduled' && new Date(c.date) > new Date()
+  const sortedClasses = [...classes].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const liveNow = sortedClasses.find((c: any) => c.status === 'live');
+  const upcoming = sortedClasses.filter((c: any) => 
+    c.status === 'scheduled' && getClassEndTime(c) >= Date.now()
   );
+  const recordings = sortedClasses.filter((c: any) => (
+    c.status === 'recorded' && c.recordingUrl
+  ));
 
   return (
     <div className="space-y-8 pb-10">
@@ -93,6 +102,39 @@ export default async function LiveClassPage() {
           <p className="text-on_surface_variant italic">No future classes scheduled yet.</p>
         )}
       </div>
+
+      {recordings.length > 0 && (
+        <>
+          <h3 className="text-2xl font-manrope font-bold mt-12 mb-4">Temporary Recordings</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {recordings.map((c: any) => {
+              const expiryDate = c.recordingExpiryDate
+                ? new Date(c.recordingExpiryDate)
+                : new Date(new Date(c.date).getTime() + 7 * 24 * 60 * 60 * 1000);
+              const remainingDays = Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+
+              return (
+                <KnowledgeCard key={c._id}>
+                  <div className="p-4 flex justify-between items-center">
+                    <div>
+                      <h4 className="font-bold text-on_surface">{c.topic}</h4>
+                      <p className="text-sm text-on_surface_variant">
+                        Recording available for {remainingDays} day{remainingDays === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/student/live/recordings/${c._id}`}
+                      className="text-sm font-bold text-primary border border-primary px-4 py-2 rounded-full hover:bg-primary hover:text-on_primary transition-colors flex items-center gap-2"
+                    >
+                      <PlayCircle className="w-4 h-4" /> Watch
+                    </Link>
+                  </div>
+                </KnowledgeCard>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

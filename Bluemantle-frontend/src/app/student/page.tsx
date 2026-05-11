@@ -151,7 +151,7 @@ export default async function StudentDashboard() {
               <CardHeader><CardTitle>Course Progress</CardTitle></CardHeader>
               <CardBody>
                 <div className="space-y-6">
-                  {data.courses.map((course) => (
+                  {data.courses.map((course: any) => (
                     <div key={course.id}>
                       <div className="flex justify-between text-sm mb-1 font-semibold text-on_surface">
                         <span className="truncate pr-2">{course.name}</span>
@@ -173,7 +173,7 @@ export default async function StudentDashboard() {
             <KnowledgeCard>
               <CardHeader><CardTitle>Latest Announcements</CardTitle></CardHeader>
               <CardBody className="space-y-4">
-                {data.announcements.map((ann) => (
+                {data.announcements.map((ann: any) => (
                   <div key={ann.id} className="flex gap-4">
                     <div className="p-2 rounded-full bg-primary_container text-primary h-fit">
                       <Activity className="w-5 h-5" />
@@ -192,7 +192,7 @@ export default async function StudentDashboard() {
               <KnowledgeCard className="h-full group-hover:border-primary/50 transition-colors">
                 <CardHeader><CardTitle className="group-hover:text-primary transition-colors">Recently Added Recordings</CardTitle></CardHeader>
                 <CardBody className="space-y-4">
-                  {data.recordings.slice(0, 2).map((rec, i) => (
+                  {data.recordings.slice(0, 2).map((rec: any, i: number) => (
                     <div key={i} className="flex justify-between items-center p-3 rounded-lg border border-outline_variant/30 group-hover:bg-surface_container_low transition-colors">
                       <div className="flex gap-3 items-center">
                         <PlayCircle className="w-8 h-8 text-primary" />
@@ -218,7 +218,7 @@ export default async function StudentDashboard() {
           </div>
           <KnowledgeCard className="bg-surface_container_low border-none">
             <CardBody className="space-y-4">
-              {data.marketNews.map((news) => (
+              {data.marketNews.map((news: any) => (
                 <div key={news.id} className="flex gap-4 p-4 bg-surface_container_highest border border-outline_variant/30 rounded-xl hover:border-primary/50 transition-colors cursor-pointer group">
                   <div className="w-12 h-12 flex-shrink-0 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 transition-colors">
                     {news.trending ? <TrendingUp className="w-6 h-6 text-primary" /> : <Newspaper className="w-6 h-6 text-primary" />}
@@ -276,7 +276,7 @@ export default async function StudentDashboard() {
         <KnowledgeCard>
           <CardHeader><CardTitle>Study Reminders</CardTitle></CardHeader>
           <CardBody className="space-y-4">
-            {data.reminders.map((rem) => (
+            {data.reminders.map((rem: any) => (
               <div key={rem.id} className="flex gap-4 items-start bg-surface_container_lowest p-4 rounded-xl border border-outline_variant/20 hover:border-primary/20 transition-colors">
                 {rem.status === 'error' ? (
                    <Flag className="w-5 h-5 text-error mt-0.5 flex-shrink-0" />
