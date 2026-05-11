@@ -2,6 +2,56 @@ const Course = require("../models/Course");
 const Module = require("../models/Module");
 const Video = require("../models/video");
 const Note = require("../models/Note");
+const User = require("../models/user");
+const Batch = require("../models/Batch");
+const Progress = require("../models/Progress");
+
+const sameId = (left, right) => left && right && left.toString() === right.toString();
+
+const getStudentBatchForCourse = async (user, courseId) => {
+    const explicitBatchId = user.batchId?._id || user.batchId;
+    if (explicitBatchId) {
+        const batch = await Batch.findById(explicitBatchId).select("_id courseId students").lean();
+        if (batch && sameId(batch.courseId, courseId)) return batch;
+    }
+
+    return Batch.findOne({ courseId, students: user._id }).select("_id courseId students").lean();
+};
+
+const sanitizeStudentNotes = async (notes, modules, user, courseId) => {
+    const studentBatch = await getStudentBatchForCourse(user, courseId);
+    const progressRecords = await Progress.find({ userId: user._id, courseId })
+        .select("moduleId status completionPercentage")
+        .lean();
+    const progressByModule = new Map(progressRecords.map((progress) => [progress.moduleId.toString(), progress]));
+    const moduleById = new Map(modules.map((module) => [module._id.toString(), module]));
+
+    return notes
+        .filter((note) => {
+            if (!note.isActive || note.visibility === "hidden") return false;
+            if (note.visibility === "batch" || note.batchId) {
+                return !!studentBatch && sameId(note.batchId, studentBatch._id);
+            }
+            return true;
+        })
+        .map((note) => {
+            const module = moduleById.get(note.moduleId.toString());
+            const progress = progressByModule.get(note.moduleId.toString());
+            const requiresManualUnlock = note.unlockMode === "manual" || module?.unlockCondition === "manual";
+            const hasManualAccess = note.manualUnlocked || (note.unlockedForStudents || []).some((studentId) => sameId(studentId, user._id));
+            const isUnlocked = requiresManualUnlock
+                ? hasManualAccess
+                : progress?.status === "completed" || progress?.completionPercentage >= 100;
+
+            const { fileUrl, accessLog, unlockedForStudents, ...safeNote } = note;
+            return {
+                ...safeNote,
+                isUnlocked: !!isUnlocked,
+                lockedReason: isUnlocked ? "" : requiresManualUnlock ? "Waiting for teacher/admin unlock" : "Complete this module to unlock resources",
+                accessUrl: isUnlocked ? `/api/notes/${note._id}/access` : null
+            };
+        });
+};
 
 exports.createCourse = async (req, res) => {
     try {
@@ -60,7 +110,11 @@ exports.getCourseDetails = async (req, res) => {
 
         const modules = await Module.find({ courseId: id }).sort({ order: 1 }).lean();
         const videos = await Video.find({ courseId: id }).sort({ order: 1 }).lean();
-        const notes = await Note.find({ courseId: id }).lean();
+        let notes = await Note.find({ courseId: id }).lean();
+        if ((req.user.role || "").toLowerCase() === "student") {
+            const user = req.userDb || await User.findById(req.user.id).select("role enrolledCourses batchId").lean();
+            notes = await sanitizeStudentNotes(notes, modules, user, id);
+        }
 
         const formattedModules = modules.map(mod => {
             return {
@@ -102,7 +156,12 @@ exports.getCourseNotes = async (req, res) => {
         const course = await Course.findOne({ _id: id, isActive: true });
         if (!course) return res.status(404).json({ success: false, message: "Course not found" });
 
-        const notes = await Note.find({ courseId: id });
+        let notes = await Note.find({ courseId: id }).lean();
+        if ((req.user.role || "").toLowerCase() === "student") {
+            const modules = await Module.find({ courseId: id }).lean();
+            const user = req.userDb || await User.findById(req.user.id).select("role enrolledCourses batchId").lean();
+            notes = await sanitizeStudentNotes(notes, modules, user, id);
+        }
         res.json({ success: true, message: "Notes retrieved successfully", data: notes });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

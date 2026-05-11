@@ -3,13 +3,18 @@ const Video = require("../models/video");
 
 exports.createModule = async (req, res) => {
     try {
-        const { courseId, title, order } = req.body;
+        const { courseId, title, order, unlockCondition } = req.body;
         
         if (!courseId || !title || order === undefined) {
             return res.status(400).json({ success: false, message: "Missing required fields" });
         }
 
-        const newModule = await Module.create({ courseId, title, order });
+        const newModule = await Module.create({
+            courseId,
+            title,
+            order,
+            ...(unlockCondition !== undefined && { unlockCondition })
+        });
 
         res.status(201).json({ success: true, message: "Module created successfully", data: newModule });
     } catch (error) {
@@ -31,11 +36,15 @@ exports.getCourseModules = async (req, res) => {
 exports.updateModule = async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, order } = req.body;
+        const { title, order, unlockCondition } = req.body;
 
         const module = await Module.findByIdAndUpdate(
             id,
-            { ...(title !== undefined && { title }), ...(order !== undefined && { order }) },
+            {
+                ...(title !== undefined && { title }),
+                ...(order !== undefined && { order }),
+                ...(unlockCondition !== undefined && { unlockCondition })
+            },
             { new: true }
         );
 

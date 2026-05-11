@@ -15,6 +15,11 @@ const moduleSchema = new mongoose.Schema(
     order: {
       type: Number,
       required: true
+    },
+    unlockCondition: {
+      type: String,
+      enum: ["auto", "manual"],
+      default: "auto"
     }
   },
   { timestamps: true }

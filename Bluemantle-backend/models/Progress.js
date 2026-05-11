@@ -30,6 +30,15 @@ const progressSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    status: {
+      type: String,
+      enum: ["locked", "in_progress", "completed"],
+      default: "in_progress",
+      index: true
+    },
+    completedAt: {
+      type: Date
+    },
     lastAccessedVideo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Video"

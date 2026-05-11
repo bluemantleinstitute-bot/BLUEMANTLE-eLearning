@@ -5,7 +5,7 @@ import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/Kno
 import { 
   UploadCloud, FileText, CheckCircle2, AlertCircle, Info, 
   Trash2, ArrowRight, Video, Search, Filter, 
-  RefreshCw, Upload, X, ExternalLink
+  RefreshCw, Upload, X, ExternalLink, LockKeyhole, Users
 } from "lucide-react";
 import { db } from "@/lib/db";
 import { apiRequest } from "@/lib/api";
@@ -29,7 +29,12 @@ export default function TeacherMaterials() {
     duration: "",
     fileUrl: "",
     description: "",
-    order: 1
+    order: 1,
+    resourceType: "Note",
+    visibility: "enrolled",
+    unlockMode: "auto",
+    batchId: "",
+    fileSize: "Unknown"
   });
 
   // Archive states
@@ -74,7 +79,7 @@ export default function TeacherMaterials() {
       
       const combined = [
         ...(videos || []).map((v: any) => ({ ...v, type: "video" })),
-        ...(notes || []).map((n: any) => ({ ...n, type: "note" }))
+        ...(notes || []).map((n: any) => ({ ...n, contentType: n.type, type: "note" }))
       ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       
       setMaterials(combined);
@@ -103,6 +108,10 @@ export default function TeacherMaterials() {
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourse || !selectedModule || !formData.title) return;
+    if (uploadType === "note" && formData.visibility === "batch" && !formData.batchId) {
+      alert("Please choose a batch for batch-only resources.");
+      return;
+    }
 
     try {
       setUploading(true);
@@ -121,7 +130,12 @@ export default function TeacherMaterials() {
         courseId: selectedCourse,
         moduleId: selectedModule,
         order: Number(formData.order),
-        description: formData.description
+        description: formData.description,
+        type: formData.resourceType,
+        visibility: formData.visibility,
+        unlockMode: formData.unlockMode,
+        batchId: formData.visibility === "batch" ? formData.batchId : undefined,
+        fileSize: formData.fileSize
       };
 
       const res = await apiRequest(endpoint, {
@@ -131,7 +145,19 @@ export default function TeacherMaterials() {
 
       if (res.success) {
         alert(`${uploadType === "video" ? "Video" : "Note"} uploaded successfully!`);
-        setFormData({ title: "", youtubeId: "", duration: "", fileUrl: "", description: "", order: 1 });
+        setFormData({
+          title: "",
+          youtubeId: "",
+          duration: "",
+          fileUrl: "",
+          description: "",
+          order: 1,
+          resourceType: "Note",
+          visibility: "enrolled",
+          unlockMode: "auto",
+          batchId: "",
+          fileSize: "Unknown"
+        });
         fetchInitialData();
       } else {
         alert(res.message || "Upload failed");
@@ -183,6 +209,13 @@ export default function TeacherMaterials() {
       return isNote && matchesSearch && matchesCourse && matchesModule;
     });
   }, [materials, search, courseFilter, moduleFilter]);
+
+  const batchOptions = useMemo(() => {
+    return (teacherData?.assignedBatches || []).filter((batch: any) => {
+      const courseId = batch.courseId?._id || batch.courseId || batch.course?.id;
+      return !selectedCourse || courseId === selectedCourse;
+    });
+  }, [teacherData, selectedCourse]);
 
   if (loading || !teacherData) {
     return (
@@ -311,7 +344,7 @@ export default function TeacherMaterials() {
                              <div className="flex items-center gap-2">
                                 <h4 className="font-bold text-xs text-on_surface group-hover:text-primary transition-colors">{item.title}</h4>
                                 <span className="px-1.5 py-0.5 rounded bg-surface_container_highest text-[8px] font-black text-outline uppercase tracking-tighter">
-                                   {getFileFormat(item.fileUrl)}
+                                   {item.contentType || getFileFormat(item.fileUrl)}
                                 </span>
                              </div>
                              <p className="text-[9px] text-outline uppercase font-bold tracking-widest mt-0.5">
@@ -320,6 +353,9 @@ export default function TeacherMaterials() {
                           </div>
                        </div>
                        <div className="flex items-center gap-2">
+                          <span title={item.unlockMode === "manual" ? "Manual unlock" : "Auto after completion"} className="p-2 bg-surface_container_high text-outline rounded-lg">
+                             {item.visibility === "batch" ? <Users className="w-3.5 h-3.5" /> : <LockKeyhole className="w-3.5 h-3.5" />}
+                          </span>
                           <a href={item.type === 'video' ? `https://youtube.com/watch?v=${item.youtubeId}` : item.fileUrl} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-primary/10 text-primary rounded-lg transition-all">
                              <ExternalLink className="w-3.5 h-3.5" />
                           </a>
@@ -387,9 +423,48 @@ export default function TeacherMaterials() {
                        </div>
                     </div>
                   ) : (
-                    <div>
-                       <label className="block text-[9px] font-bold text-outline uppercase tracking-widest mb-1.5">File URL</label>
-                       <input required type="url" value={formData.fileUrl} onChange={(e) => setFormData({...formData, fileUrl: e.target.value})} placeholder="Direct link" className="w-full bg-surface_container_low border border-outline_variant/20 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-primary/50 text-on_surface" />
+                    <div className="space-y-4">
+                       <div>
+                          <label className="block text-[9px] font-bold text-outline uppercase tracking-widest mb-1.5">Secure File URL</label>
+                          <input required type="url" value={formData.fileUrl} onChange={(e) => setFormData({...formData, fileUrl: e.target.value})} placeholder="Drive, S3, or CDN link" className="w-full bg-surface_container_low border border-outline_variant/20 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-primary/50 text-on_surface" />
+                       </div>
+                       <div className="grid grid-cols-2 gap-4">
+                          <div>
+                             <label className="block text-[9px] font-bold text-outline uppercase tracking-widest mb-1.5">Resource Type</label>
+                             <select value={formData.resourceType} onChange={(e) => setFormData({...formData, resourceType: e.target.value})} className="w-full bg-surface_container_high border border-outline_variant/20 rounded-xl px-3 py-2.5 text-xs text-on_surface focus:ring-2 focus:ring-primary/20 outline-none">
+                                <option value="Note">Note</option>
+                                <option value="PDF">PDF</option>
+                                <option value="Assignment">Assignment</option>
+                                <option value="Resource">Resource</option>
+                             </select>
+                          </div>
+                          <div>
+                             <label className="block text-[9px] font-bold text-outline uppercase tracking-widest mb-1.5">Unlock</label>
+                             <select value={formData.unlockMode} onChange={(e) => setFormData({...formData, unlockMode: e.target.value})} className="w-full bg-surface_container_high border border-outline_variant/20 rounded-xl px-3 py-2.5 text-xs text-on_surface focus:ring-2 focus:ring-primary/20 outline-none">
+                                <option value="auto">Auto after module completion</option>
+                                <option value="manual">Manual unlock</option>
+                             </select>
+                          </div>
+                       </div>
+                       <div className="grid grid-cols-2 gap-4">
+                          <div>
+                             <label className="block text-[9px] font-bold text-outline uppercase tracking-widest mb-1.5">Visibility</label>
+                             <select value={formData.visibility} onChange={(e) => setFormData({...formData, visibility: e.target.value, batchId: e.target.value === "batch" ? formData.batchId : ""})} className="w-full bg-surface_container_high border border-outline_variant/20 rounded-xl px-3 py-2.5 text-xs text-on_surface focus:ring-2 focus:ring-primary/20 outline-none">
+                                <option value="enrolled">Course students</option>
+                                <option value="batch">Specific batch</option>
+                                <option value="hidden">Hidden</option>
+                             </select>
+                          </div>
+                          <div>
+                             <label className="block text-[9px] font-bold text-outline uppercase tracking-widest mb-1.5">Batch</label>
+                             <select disabled={formData.visibility !== "batch"} required={formData.visibility === "batch"} value={formData.batchId} onChange={(e) => setFormData({...formData, batchId: e.target.value})} className="w-full bg-surface_container_high border border-outline_variant/20 rounded-xl px-3 py-2.5 text-xs text-on_surface focus:ring-2 focus:ring-primary/20 outline-none disabled:opacity-50">
+                                <option value="">Choose Batch</option>
+                                {batchOptions.map((batch: any) => (
+                                  <option key={batch._id || batch.id} value={batch._id || batch.id}>{batch.name}</option>
+                                ))}
+                             </select>
+                          </div>
+                       </div>
                     </div>
                   )}
 

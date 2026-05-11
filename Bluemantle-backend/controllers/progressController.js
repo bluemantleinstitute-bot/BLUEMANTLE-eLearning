@@ -76,8 +76,13 @@ exports.watchVideo = async (req, res) => {
         }
 
         // Recalculate percentage
-        progress.completionPercentage = (progress.completedVideos.length / totalVideos) * 100;
+        progress.completionPercentage = totalVideos > 0 ? (progress.completedVideos.length / totalVideos) * 100 : 100;
         if (progress.completionPercentage > 100) progress.completionPercentage = 100;
+        const isCompleted = progress.completionPercentage >= 100;
+        progress.status = isCompleted ? "completed" : "in_progress";
+        if (isCompleted && !progress.completedAt) {
+            progress.completedAt = new Date();
+        }
         
         progress.lastAccessedVideo = videoId;
         await progress.save();
@@ -136,7 +141,10 @@ exports.getCourseProgress = async (req, res) => {
                 moduleId: m._id,
                 title: m.title,
                 completedVideos: prog ? prog.completedVideos.length : 0,
-                percentage: prog ? prog.completionPercentage : 0
+                percentage: prog ? prog.completionPercentage : 0,
+                status: prog ? prog.status : "locked",
+                completedAt: prog ? prog.completedAt : null,
+                resourcesUnlocked: !!(prog && prog.status === "completed")
             };
         });
 

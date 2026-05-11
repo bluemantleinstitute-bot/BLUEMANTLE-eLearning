@@ -326,6 +326,10 @@ export const db = {
       const response = await apiRequest("/notes/my-notes");
       return response;
     },
+    openResource: async (resourceId: string) => {
+      const response = await apiRequest(`/notes/${resourceId}/access`);
+      return response.url;
+    },
     getCatalog: async () => {
       const response = await apiRequest("/courses");
       return response.data;
