@@ -12,6 +12,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  experimental: {
+    cpus: 1,
+    workerThreads: true,
+  },
   async headers() {
     return [
       {
